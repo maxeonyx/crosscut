@@ -20,6 +20,7 @@ Both are product bugs.
 | `src/main.rs` | The binary. It embeds `skill/` with `include_str!`, so a new skill file must be added to `SKILL_FILES`. |
 | `tests/cli.rs` | Black-box tests. Harness runs use small `sh -c` commands, never a real model. |
 | `crosscut/` | CrossCut applied to itself: concerns about this repository. |
+| `docs/index.html` | The site. It passes the doctrine on too, so it must keep the carry-forward paragraph (a test checks). |
 
 ## Commands
 

@@ -434,3 +434,19 @@ fn concerns_are_refreshed_concurrently_up_to_jobs() {
         "three concerns with two workers should take two rounds, took {elapsed}s"
     );
 }
+
+#[test]
+fn readme_and_site_carry_the_requirement_to_carry_the_doctrine() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let readme = flat(&fs::read_to_string(root.join("README.md")).unwrap());
+    assert!(
+        readme
+            .contains("must pass on the requirement to keep both the framing and this requirement"),
+        "README"
+    );
+    let site = flat(&fs::read_to_string(root.join("docs/index.html")).unwrap());
+    assert!(
+        site.contains("the requirement to pass on both the doctrine and this requirement"),
+        "site"
+    );
+}

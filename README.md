@@ -13,7 +13,7 @@ Git keeps the history. The views are food for thought, not obligations: nothing 
 CrossCut is mostly a skill for your existing coding agent (Claude Code, Codex, OpenCode). A small binary carries the skill and runs refreshes headless.
 
 ```bash
-cargo install --git https://github.com/maxeonyx/crosscut
+cargo install --git https://github.com/maxeonyx/crosscut --locked
 crosscut install-skill           # once
 crosscut                         # what it is, and how an agent should start
 ```
