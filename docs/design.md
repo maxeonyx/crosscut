@@ -227,9 +227,13 @@ loaded. Concern files are therefore trusted like scripts.
   - how concern material should be contributed back.
 - **Non-goals:** gating, scoring, compliance state, an agent runtime, a
   plugin system, a project graph, a database.
-- **Deliberately open:** when `agent-tools` migrates from `crates/standards`
-  to concern files (Max: develop on a separate `crosscut` branch until
-  CrossCut 1.0).
+- **Decided, 2026-09-28:** `agent-tools` stopped ratcheting concerns. On
+  its `crosscut` branch (kept separate until CrossCut 1.0),
+  `crates/standards` was deleted and its 35 modules folded into eight
+  concern files. Max's reason: "testing tests, ratcheting ratchet,
+  machinery for the machinery". That is the predecessor's lesson in one
+  line, and the reason `concern-machinery-yield` now points at `crosscut/`
+  itself.
 
 ## Why the CLI exists at all
 
@@ -240,9 +244,10 @@ The skill alone works interactively. The binary earns its place by:
   the skill and the binary cannot drift apart.
 - **Orientation.** An agent that only has the binary on `PATH` gets the
   doctrine and the next step from `crosscut` alone.
-- **Headless refresh.** Running each concern through a harness, isolating
-  failures, and writing back only the view section is fiddly enough to be
-  worth doing once, correctly.
+- **Headless refresh.** Running each concern through a harness is fiddly
+  enough to be worth doing once, correctly: a pool of workers (six by
+  default), isolated failures, a timeout, containment flags, and writing
+  back only the view section.
 - **Listing.** `crosscut list` answers "what are we watching and how stale
   is it?" without spending a model call.
 
