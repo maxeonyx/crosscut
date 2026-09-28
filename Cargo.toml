@@ -1,0 +1,15 @@
+[package]
+name = "crosscut"
+version = "0.1.0"
+edition = "2021"
+description = "Widen what coding agents notice about software: persistent, non-binding cross-cutting concern visibility"
+license = "MIT"
+repository = "https://github.com/maxeonyx/crosscut"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+jiff = "0.2"
+
+[dev-dependencies]
+assert_cmd = "2"
+tempfile = "3"
