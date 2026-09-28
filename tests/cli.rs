@@ -153,6 +153,12 @@ fn every_mode_prompt_carries_the_doctrine_and_its_references() {
                 .stdout,
         );
         assert!(out.contains("<!-- catalogue.md -->"), "{mode}");
+        if mode == "setup" {
+            assert!(
+                out.contains("<!-- modes/establish.md -->"),
+                "setup sends agents to establish, so it must include it"
+            );
+        }
         assert!(flat(&out).contains("This is not a bug hunt"), "{mode}");
     }
 }
@@ -673,6 +679,18 @@ fn prompt_checks_are_tested_against_fixtures_with_agentic() {
     let out = j.ok(&["test", "recoverable-state", "--agentic", "--harness", agent]);
     assert!(
         out.contains("2 fixture cells: 2 as expected, 0 not"),
+        "{out}"
+    );
+}
+
+#[test]
+fn map_with_no_concerns_says_how_to_add_one() {
+    let j = Juniper::new();
+    fs::remove_dir_all(j.root.join("crosscut/concerns")).unwrap();
+    fs::create_dir_all(j.root.join("crosscut/concerns")).unwrap();
+    let out = j.ok(&["map"]);
+    assert!(
+        out.contains("no concerns yet") && out.contains("crosscut prompt establish"),
         "{out}"
     );
 }

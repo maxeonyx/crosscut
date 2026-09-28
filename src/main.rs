@@ -272,6 +272,9 @@ fn prompt(mode: &str) -> Result<String, String> {
         ));
     }
     let mut refs = vec![format!("modes/{mode}.md")];
+    if mode == "setup" {
+        refs.push("modes/establish.md".into());
+    }
     if matches!(mode, "setup" | "discover") {
         refs.push("catalogue.md".into());
         refs.push("reservoirs.md".into());
@@ -665,6 +668,13 @@ fn map(project: Option<String>, root: Option<PathBuf>) -> Result<ExitCode, Strin
     if let Some(name) = project {
         select_projects(&projects, std::slice::from_ref(&name))?;
         return map_column(&concerns, &name);
+    }
+    if concerns.is_empty() {
+        println!(
+            "no concerns yet in {}; `crosscut prompt setup` or `crosscut prompt establish` shows how to add them",
+            root.join("crosscut/concerns").display()
+        );
+        return Ok(ExitCode::SUCCESS);
     }
     let first = concerns
         .iter()
