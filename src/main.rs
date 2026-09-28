@@ -428,7 +428,8 @@ impl Harness {
         let (mut cmd, stdin) = match self {
             // Bash is needed to run "How to look" commands. The edit tools are denied and the
             // target's project settings (hooks, MCP servers, allow rules) are not loaded,
-            // because the target may not be trusted. The view comes back as text.
+            // because the target may not be trusted. MCP servers and subagents are off too,
+            // so one refresh cannot reach external services or fan out. The view comes back as text.
             Harness::Claude => {
                 let mut cmd = Command::new("claude");
                 cmd.args([

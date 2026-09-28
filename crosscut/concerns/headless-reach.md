@@ -47,47 +47,42 @@ weaker. It also means a runaway run is bounded in time and cost.
 
 ## Current view — 2026-09-28
 
-Applies strongly. The harnesses still enforce very different things, and the docs still describe the strongest case as if it applied to all of them. Nothing in `src/main.rs` has changed since the last view: there is still one commit, `1e5539a`, and the line numbers are the same. This refresh adds findings about inherited settings, and about flags the harnesses offer that CrossCut does not use. The evidence comes from source, `--help` output and local config files (claude 2.1.283, codex-cli 0.154.0, opencode v1.14.22-max.22), not from adversarial runs.
+Applies strongly. Commit `b200de9` narrowed the Claude path and made the docs honest, and a refresh is now bounded in time. Claude's unscoped Bash is still the main open reach, along with OpenCode having no flags at all. The evidence comes from source, `--help` output and local config (claude 2.1.283, codex-cli 0.154.0, opencode v1.14.22-max.22). It also comes from this refresh itself: `ps` shows it was launched by `target/debug/crosscut refresh headless-reach --harness claude`, so the Claude observations below describe the real command from the inside. No adversarial runs were made.
 
-- **Claude Code (`src/main.rs:412-421`):** it runs with `--permission-mode dontAsk --allowedTools Read,Grep,Glob,Bash,WebFetch,WebSearch`.
-  - Unscoped `Bash` can write, delete, `git push` and reach the network. The only barrier is a sentence in the prompt at `:488`. High confidence.
-  - **New: target repo settings.** `claude --help` says `-p` "skips the workspace trust dialog… Only use this in directories you trust". The command runs in the directory that holds `crosscut/`. When a project keeps its own concerns, any `.claude/settings.json` in that project is loaded without asking. That includes hooks, permission allow rules and MCP servers. So a checked-in project file, not just the concern text, can widen reach. Medium-high confidence: this is inferred from the help text and not tried.
-  - **New: available flags.** Claude offers `--bare` (skip hooks and plugins), `--setting-sources`, `--strict-mcp-config`, `--max-budget-usd` and `--model`. None of them is passed.
-  - **This machine:** `~/.claude/settings.json` has no permissions and no hooks, and one plugin (rust-analyzer-lsp). Neither this repo nor its parent has a `.claude/` directory. Other machines are unknown.
-- **Codex (`:423-433`):** `--sandbox read-only` is a real boundary, enforced by the harness.
-  - The help text does not say whether read-only also blocks network. It is still unconfirmed whether `curl` and `gh api` behave differently under Codex. Medium confidence that they are blocked.
-  - Codex user config (`-c` overrides, `~/.codex/config.toml`) can still apply. What it contains here was not checked.
-- **OpenCode (`:435-438`):** it runs as `opencode run <prompt>` with no permission flags, and the prompt goes on argv. The argv concerns are unchanged: the full prompt is visible in `ps`, and it will approach Windows' 32K command-line limit as concern files grow.
-  - **This machine:** `~/.config/opencode/opencode.jsonc` restricts only `external_directory` (allowing `/tmp`, the cargo registry and similar). It sets nothing for `edit` or `bash`, so reach is OpenCode's defaults, which I believe allow both. It also loads local plugins and agents. Medium confidence.
-  - It sets `experimental.permission_timeout: 240000`. Whether a headless run waits on a permission prompt or rejects it is unknown.
-  - **New: available flags.** `opencode run` has `--pure` (no external plugins), `-m/--model`, `--ephemeral`, and `-f/--file` for attachments. `-f` might carry the prompt instead of argv, but this is untested. Its `--dangerously-skip-permissions` is described as approving only what is "not explicitly denied". That suggests a `permission` block passed per run could deny edit and bash. Whether such a block can be given per invocation is unknown.
-- **Bounds:** unchanged.
-  - There is no process timeout. `wait_with_output` at `:539` blocks forever on a hung harness.
-  - There is no budget or turn limit, and no way to choose the model.
-  - With no slugs given, it refreshes every concern in sequence, using the first harness found on `PATH` (`:391-398`, Claude first). So the default is the least constrained harness that is installed.
-- **Docs versus reality:**
-  - `skill/modes/refresh.md:58-60` says a headless agent "never needs write access". The last view cited this as `:299-302`, which was wrong.
-  - `docs/design.md:207` says "needs no write permission".
-  - Both describe what the agent *needs*. Neither says what the Claude and OpenCode paths actually *have*.
-  - `design.md:109-110` names prompt injection as applying to CrossCut itself. The new trust-dialog finding makes that concrete: the injection can come from repo settings, not just from prose.
-- **Worth considering:** ordered roughly by leverage per unit of effort.
-  - Pass `--bare` or `--setting-sources user` plus `--strict-mcp-config` to Claude. This is one line, and it removes the vector where target repo settings apply.
-  - Scope Claude's Bash (for example `Bash(git log:*)`), or prefer Codex's sandbox when it is installed. Or state the asymmetry plainly in `refresh.md` and `--help`.
-  - Pass through `--model` and `--max-budget-usd` for Claude, `-m` and `--pure` for OpenCode, and add a timeout for each concern.
-  - Check whether OpenCode can take a per-run deny policy, and whether the prompt can travel as a file via `-f`.
+- **Could it disappear?** Not yet. Only Codex runs in a real read-only sandbox. The default harness is still the first one found on `PATH`, Claude first (`src/main.rs:403-423`).
+- **Claude (`src/main.rs:432-444`):** the command is now `-p --no-session-persistence --setting-sources user --permission-mode dontAsk --allowedTools Read,Grep,Glob,Bash,WebFetch,WebSearch --disallowedTools Edit,Write,NotebookEdit`.
+  - **Project settings no longer load.** `--setting-sources user` removes the last view's main new vector: a target's `.claude/settings.json` hooks, allow rules and MCP servers. High confidence that this is enforced by the flag.
+  - **Memory files are probably no longer loaded either.** The umbrella's `CLAUDE.md` is `@AGENTS.md`, and so is the one in this repo. This run's context has no trace of that content (for example "Commit and push frequently"). That suggests project-level memory files are not loaded under `--setting-sources user`. Medium confidence: this rests on one observation from inside the run and no documentation.
+  - **Unscoped `Bash` remains.** Denying Edit, Write and NotebookEdit removes only the convenient write tools. Bash can still write, delete, `git push`, and reach the network with `curl` or `gh`, and WebFetch is also allowed. High confidence.
+  - **User-level extras still load.** They are inherited from user settings and the account. In this run the rust-analyzer plugin's `LSP` tool was visible, and so were `Agent`, `Workflow`, `WebFetch` and `WebSearch`. So were claude.ai-connected MCP tools that can write (`mcp__claude_ai_Claude_Docs__batch`/`update`/`create`/`delete`, which create docs on an external service).
+    - None of these is on `--allowedTools`. Under `dontAsk` they are probably refused, but that was not tested, deliberately.
+    - `Agent` and `Workflow` could spawn subagents, and whether they are denied is unknown. If they are allowed, cost could multiply.
+    - `--strict-mcp-config` is not passed, and it is unknown whether it would suppress claude.ai connectors.
+  - **Why not `--bare`.** Help now shows that `--bare` requires `ANTHROPIC_API_KEY` auth, so it is not a free drop-in for subscription users. That explains why `--setting-sources` was chosen instead.
+- **Codex (`:445-455`):** `exec --sandbox read-only --skip-git-repo-check --ephemeral`, with the prompt on stdin. This is still the one enforced boundary.
+  - Whether read-only also blocks network is still not confirmed from help. Medium confidence that it does.
+  - `~/.codex/config.toml` was not read in this refresh.
+- **OpenCode (`:456`, `:488-490`):** `opencode run <prompt>`, plus `-m` if a model is given. It still passes no permission flags and no `--pure`, and the prompt still travels on argv, so it is visible in `ps` and limited in length on Windows.
+  - On this machine the permission config was not re-read. The last view found that it restricts only `external_directory`, so edit and bash fall to OpenCode's defaults (believed to allow both).
+- **Custom `--harness` commands (`:457-472`):** they run through `sh -c`/`cmd /C` with whatever reach the user's command has. This is explicit and user-chosen, so it is what they would expect.
+- **Bounds:**
+  - **Time:** there is now a per-concern timeout, 30 minutes by default (`:135`). It kills the child on expiry (`:586-599`). This is enforced. The kill targets only the direct child, so whether grandchildren the harness spawned (shells, MCP servers) are also stopped is unknown.
+  - **Model:** `--model` now passes through (`:474-483`).
+  - **Cost:** still no budget or turn limit. `--max-budget-usd` exists for `claude -p` and is not passed. A 30-minute run is bounded, but spend inside it is not.
+- **Docs versus reality:** these now largely match.
+  - `skill/modes/refresh.md:56-63` says plainly that "never needs to" is not "cannot", that only Codex enforces read-only, and that concern files should be trusted like scripts.
+  - `docs/design.md:206-210` says the same.
+  - `README.md:13` makes no reach claim. It is silent rather than wrong, and a user who reads only the README or `--help` would not learn about the asymmetry. Whether `crosscut refresh --help` states it was not checked.
+- **Worth considering:**
+  - Pass `--max-budget-usd` (or expose it) for Claude. It is one flag and closes the remaining unbounded dimension.
+  - Scope Bash (for example `Bash(git log:*)`, `Bash(cargo *)`), or deny `Agent`, `Workflow` and `mcp__*` explicitly via `--disallowedTools`. Either one makes the Claude reach enforced rather than dependent on `dontAsk` defaults.
+  - Prefer Codex when both it and Claude are installed, since Codex is the one with a real sandbox. Or say in `--help` which harness gets which reach.
+  - OpenCode: `--pure`, a per-run deny policy if one exists, and `-f` for the prompt. All three are still unexplored.
+  - Kill the process group on timeout, not just the child.
 - **Since last view:**
-  - Code: no changes.
-  - New findings: repo settings apply because `-p` skips the trust dialog; mitigating flags exist in both Claude and OpenCode; OpenCode's actual permission config on this machine was read.
-  - Corrected the `refresh.md` line citation.
+  - **Code changed** (`b200de9`): `--setting-sources user`, `--disallowedTools Edit,Write,NotebookEdit`, `--no-session-persistence`, a timeout, `--model`, and Codex `--ephemeral`. The last view's claim that the code was unchanged no longer holds, and its line numbers are stale.
+  - **Docs** now state the asymmetry honestly.
+  - **New observations:** memory files are apparently suppressed, user-level plugin and claude.ai MCP tools are still present, and `--bare` needs an API key.
 - **Noticed along the way:**
-  - Views still don't record which harness or model wrote them. That was raised last time and nothing has changed.
-  - The `refresh.md:299-302` miscitation looks like a line number from the concatenated prompt, not from the file. Headless agents only see that combined prompt, so they may keep citing positions in it as if they were file lines. That could be worth one sentence in the refresh prompt.
-  - (Added by hand after this refresh; the headless run did not see it.)
-    `claude -p` also loads `CLAUDE.md`/`AGENTS.md` from every parent
-    directory. Here that means the umbrella's `AGENTS.md`, which says
-    "Commit and push frequently" (`../../AGENTS.md:314`) and "The concern is
-    not real until enforcement exists" (`:163`). Those are the opposite of
-    CrossCut's doctrine, and they are loaded next to an unscoped Bash. In a
-    target project, whatever that project's guidance tells agents to do
-    reaches the refresh agent too. `--bare` or `--setting-sources` may or may
-    not suppress memory files; that is unverified.
+  - The previous view claimed "one commit, `1e5539a`" while describing code that `b200de9` then changed in the same commit that added the concern. Views written against an uncommitted working tree can misdate themselves. Recording `git rev-parse HEAD` (and dirty state) in each view would make this visible, and it fits the existing open point that views don't record which harness or model wrote them.
+  - Account-level claude.ai connectors reach headless runs regardless of any repo or user settings file. That is a reach vector outside anything CrossCut or the target controls.
