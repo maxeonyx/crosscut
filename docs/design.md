@@ -411,3 +411,37 @@ with the work that caused them.
 - Tier-3 granularity is **per cell** (Max, 2026-09-28).
 - There are no scheduled runs. They are out of scope (Max, 2026-09-28).
 - The wrapper-discovery question dissolves; see episode 11.
+
+## 11. Evaluation 1 of the round 2 prompts (2026-09-28)
+
+A fresh agent was given only `crosscut prompt setup`, the binary, and an
+expanded invented Juniper with no `crosscut/`.
+
+It produced three capability concerns, one at each tier, each with a reason
+for its tier and a tier-0 "design it away" idea:
+- version-visibility, at tier 2;
+- staying-current, at tier 1, over `cargo metadata`;
+- recoverable-state, at tier 3.
+
+It also produced:
+- 18 fixture cells, all passing, including the tricky cases;
+- sibling gaps (larder lacks what pantry has; auth is solved twice);
+- decisions proposed but not made;
+- defects mentioned in one line each.
+
+The prompt-check loop worked too. Haiku answered `n/a` where the agent
+judged `unknown`, so the agent tightened `check.md` and added a fixture.
+
+Fixed after the eval: setup now includes `establish.md`, and an empty
+`map` says how to start.
+
+Still open, and worth reopening when they bite:
+- **Enforcing read-only prompt checks.** Only Codex's sandbox enforces it.
+  One option is preferring Codex when both are installed; another is
+  running the harness in a disposable copy of the project.
+- **Showing prompt checks whose fixtures were never run.** The map cannot
+  show this without recording test runs, which is new state. Wait until
+  someone is misled by an untested judgment.
+- **Tension between testing a prompt check and observing with it,** when
+  the model budget is tight. Establish says to test first. The eval's
+  budget was artificial, so that stands.
