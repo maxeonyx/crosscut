@@ -69,7 +69,7 @@
                        50% { box-shadow: 0 6px 20px -8px var(--accent), 0 0 0 12px transparent; } }
     .grow { animation: grow .55s cubic-bezier(.2,.7,.2,1) both; }
     @keyframes grow { from { opacity: 0; transform: scale(.6); } }
-    .fade { animation: fade .7s ease both; }
+    .fade { animation: fade .35s ease both; }
     @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
 
     .tip { position: fixed; z-index: 10; max-width: 17rem; background: var(--fg); color: var(--bg); font-size: 0.85rem; line-height: 1.35;
@@ -205,12 +205,8 @@ crosscut install-skill   <span class="dim"># for Claude Code, Codex and OpenCode
       cell.style.animationDelay = `${200 + 90 * (Math.abs(r - r0) + Math.abs(c - c0))}ms`;
       cell.classList.add("grow");
     }));
-    let delay = 1.2;
-    for (const el of document.querySelectorAll(".legend, .rest")) {
-      el.style.animationDelay = `${delay}s`;
-      el.classList.add("fade");
-      delay += 0.15;
-    }
+    // The page's structure arrives at once; only the grid takes its time.
+    for (const el of document.querySelectorAll(".legend, .rest")) el.classList.add("fade");
   });
 
   // Every gap has a question behind it: hover or tap a dashed cell to see it.
