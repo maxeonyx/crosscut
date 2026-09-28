@@ -382,3 +382,55 @@ fn model_is_passed_to_known_harnesses_and_refused_for_custom_commands() {
         .assert()
         .code(2);
 }
+
+#[test]
+fn concerns_are_refreshed_concurrently_up_to_jobs() {
+    let eco = ecosystem();
+    for slug in ["a", "b", "c", "d"] {
+        fs::write(
+            eco.path().join(format!("crosscut/concerns/{slug}.md")),
+            format!("# {slug}?\n"),
+        )
+        .unwrap();
+    }
+    let harness =
+        "cat >/dev/null; sleep 1; echo '<crosscut-view>'; echo ok; echo '</crosscut-view>'";
+    let started = std::time::Instant::now();
+    crosscut()
+        .args(["refresh", "--jobs", "6", "--harness", harness])
+        .current_dir(eco.path())
+        .assert()
+        .success();
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed.as_secs_f64() < 3.0,
+        "six concerns with six workers took {elapsed:?}"
+    );
+    for slug in ["a", "b", "c", "d", "recovery", "version"] {
+        assert!(
+            read(eco.path(), slug).ends_with("ok\n"),
+            "{slug} not refreshed"
+        );
+    }
+
+    let started = std::time::Instant::now();
+    crosscut()
+        .args([
+            "refresh",
+            "a",
+            "b",
+            "c",
+            "--jobs",
+            "2",
+            "--harness",
+            harness,
+        ])
+        .current_dir(eco.path())
+        .assert()
+        .success();
+    let elapsed = started.elapsed().as_secs_f64();
+    assert!(
+        (2.0..3.5).contains(&elapsed),
+        "three concerns with two workers should take two rounds, took {elapsed}s"
+    );
+}

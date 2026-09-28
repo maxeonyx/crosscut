@@ -7,6 +7,7 @@
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use clap::{Parser, Subcommand};
@@ -107,7 +108,7 @@ enum Cmd {
         root: Option<PathBuf>,
     },
 
-    /// Refresh current views headless, one concern at a time, through a coding harness.
+    /// Refresh current views headless, several concerns at once, through a coding harness.
     ///
     /// The agent reads the concern and the projects, runs what "How to look" says, and
     /// returns a new "Current view"; crosscut writes only that section back. Findings,
@@ -131,6 +132,9 @@ enum Cmd {
         /// Model for claude, codex or opencode (for a custom command, put it in the command).
         #[arg(long)]
         model: Option<String>,
+        /// How many concerns to refresh at once.
+        #[arg(long, default_value_t = 6)]
+        jobs: usize,
         /// Minutes to allow each concern before stopping its harness.
         #[arg(long, default_value_t = 30)]
         timeout: u64,
@@ -160,10 +164,11 @@ fn main() -> ExitCode {
             slugs,
             harness,
             model,
+            jobs,
             timeout,
             root,
             dry_run,
-        }) => refresh(slugs, harness, model, timeout, root, dry_run),
+        }) => refresh(slugs, harness, model, jobs, timeout, root, dry_run),
     };
     result.unwrap_or_else(|message| {
         eprintln!("crosscut: {message}");
@@ -628,6 +633,7 @@ fn refresh(
     slugs: Vec<String>,
     harness: Option<String>,
     model: Option<String>,
+    jobs: usize,
     timeout: u64,
     root: Option<PathBuf>,
     dry_run: bool,
@@ -673,23 +679,34 @@ fn refresh(
         return Ok(ExitCode::SUCCESS);
     }
 
-    let mut failed = 0;
-    for concern in &concerns {
-        eprintln!("crosscut: refreshing {} ...", concern.slug);
-        let prompt = refresh_prompt(&root, concern, &today);
-        let outcome =
-            ask_for_view(&harness, model, timeout, &prompt, &root, &today).and_then(|view| {
-                std::fs::write(&concern.path, concern.with_view(&view))
-                    .map_err(|e| format!("cannot write {}: {e}", concern.path.display()))
+    // A pool of `jobs` workers, each taking the next unstarted concern as soon as it is
+    // free. Concerns are separate files, so the workers never write to the same one.
+    let next = AtomicUsize::new(0);
+    let failed = AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        for _ in 0..jobs.clamp(1, concerns.len()) {
+            scope.spawn(|| {
+                while let Some(concern) = concerns.get(next.fetch_add(1, Ordering::Relaxed)) {
+                    eprintln!("crosscut: refreshing {} ...", concern.slug);
+                    let prompt = refresh_prompt(&root, concern, &today);
+                    let outcome = ask_for_view(&harness, model, timeout, &prompt, &root, &today)
+                        .and_then(|view| {
+                            std::fs::write(&concern.path, concern.with_view(&view)).map_err(|e| {
+                                format!("cannot write {}: {e}", concern.path.display())
+                            })
+                        });
+                    match outcome {
+                        Ok(()) => println!("{}: view updated", concern.slug),
+                        Err(message) => {
+                            failed.fetch_add(1, Ordering::Relaxed);
+                            eprintln!("crosscut: {}: {message}", concern.slug);
+                        }
+                    }
+                }
             });
-        match outcome {
-            Ok(()) => println!("{}: view updated", concern.slug),
-            Err(message) => {
-                failed += 1;
-                eprintln!("crosscut: {}: {message}", concern.slug);
-            }
         }
-    }
+    });
+    let failed = failed.into_inner();
     Ok(match failed {
         0 => ExitCode::SUCCESS,
         n if n == concerns.len() => ExitCode::from(2),

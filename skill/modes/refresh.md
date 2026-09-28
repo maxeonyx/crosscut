@@ -54,7 +54,7 @@ The human decides what to do with any of it.
 ## Headless
 
 `crosscut refresh` runs this mode through an installed coding harness, one
-concern at a time. It asks the agent for the new view only, and writes that
+agent per concern, six at a time by default (`--jobs`). It asks the agent for the new view only, and writes that
 into the file itself, so a headless agent never needs to edit anything.
 
 "Never needs to" is not "cannot". The agent gets a shell so that it can run
