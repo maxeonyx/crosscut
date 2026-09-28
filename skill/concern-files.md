@@ -2,166 +2,161 @@
 
 A concern is a compressed, generally useful thing that has to be true for
 people's needs to be met, such as version visibility, staying current, or
-recoverable state. Each concern file names it, says which user stories it
-serves, says what it looks like in different kinds of project, and keeps a
-dated map of where each project stands.
+recoverable state. CrossCut keeps two kinds of thing about it apart:
+- **what is observed**, which a mechanism writes and anyone can regenerate;
+- **what is decided**, which people write and no run touches.
 
-## Where they live
+The map is computed from both.
+
+## Layout
 
 ```
 crosscut/
-  README.md          what this directory is (template below)
-  projects.md        the projects the maps cover
+  README.md                what this directory is (template below)
+  projects                 the projects the map covers
   concerns/
-    <slug>.md        one concern
-    <slug>/          optional: helper scripts that only this concern uses
+    <slug>/
+      concern.md           the definition and its decisions. Written by people and agents.
+      check                the mechanism, if a machine can answer (tiers 1 and 2)
+      check.md             ...or a prompt, if it takes judgment (tier 3)
+      fixtures/<case>/     invented projects, and an `expect` file
+      observed.tsv         written by `crosscut check`. Commit it; never edit it by hand.
 ```
 
-Put `crosscut/` in the repository that should own the concerns:
-- the project itself, whose map has one row, or a row per component;
-- a wrapper repository over many projects;
-- the umbrella of related repositories.
+`projects` lists one path or glob per line, relative to the directory that
+holds `crosscut/`, for example `tools/*`. Lines starting with `#` are
+comments. A project's name is its directory name. In a wrapper over many
+repositories, the projects are its checkouts or submodules, and they never
+need to know CrossCut exists.
 
-`projects.md` gives one list item per project:
-
-```markdown
-- **name**: where it lives (a path, a remote, or both), what it is, and
-  anything a refresh should know, such as "archived", "holds family photos",
-  or "only Max uses it".
-```
-
-It starts with the name in bold. Map rows use the same names, and
-`crosscut map` orders its columns by this list. A project that is not checked
-out or not reachable becomes an `unknown` row, not an error.
-
-## Shape of one file
-
-Headings are conventions, not a schema. Keep them, because humans, agents,
-`crosscut list` and `crosscut map` all use them to find their way.
+## `concern.md`
 
 ```markdown
 # Version visibility
 
-Anyone who needs to know what is live can find out, at the moment they need
-it.
+Anyone who needs to know what is live can find out, at the moment they need it.
 
 ## User stories
 
-- **Max, mid-incident:** "is my fix live?" should take seconds, not an SSH
-  session and a guess from file dates.
-- **An agent reading a bug report:** which version is the reporter running?
+- **The on-call engineer, mid-incident:** "is the fix live?" answered in seconds.
 
 ## What it looks like here
 
-- CLI tools: `--version`, and `--version --json` with the commit.
-- Sites: a `version.json` at the site root, written by the deploy.
-- The umbrella: `docs/version.json` naming every pinned tool.
+- CLIs: `--version`. Sites: a `version.json` naming the commit. Jobs: a version line in their log.
 
-## How to look
+## Decisions
 
-- `<bin> --version --json` for each tool; `curl -s https://<site>/version.json`.
-- Judgment: is the version visible to whoever needs it, when they need it?
-
-## Current view — 2026-09-28
-
-Every tool except crosscut and agent-harness publishes both; they share one
-copied mechanism.
-
-| project | where it stands |
-|---|---|
-| trunc | yes: `--version --json`, and site `version.json` from the deploy |
-| dotsync | yes: same mechanism as trunc |
-| crosscut | missing: `--version` prints only the crate version, and the site has no version file |
-| agent-harness | partly: `--version` exists, but there is no site version file |
-| oc | n/a: archived; its frozen site still names 0.3.20 |
-
-- **Across projects:** four copies of the same deploy step. A shared release
-  workflow would give it to crosscut and agent-harness for free.
-- **Since last map:** first map.
+- **nightly-sync**: deferred: being retired once the ledger's own backups land (lead, 2026-09-01).
 ```
 
-## Writing each part
+- **Name.** The H1 is the concern's name: short, and meaningful to a
+  stranger. The sentence under it says what has to be true. The slug is the
+  directory name.
+- **User stories.** Say who needs this and what they are trying to do, with
+  a concrete example. There is often one story, and sometimes several with
+  different stakeholders. The stories are how you judge whether a project is
+  `n/a`.
+- **What it looks like here.** The same concern looks different in a CLI, a
+  site, a database, a library or a job. Say how, so that a mechanism checks
+  for the capability, not for one particular file.
+- **Decisions.** Write each as `- **project**: status: reason (who,
+  when)`, for example:
+  - `n/a` when none of the stories apply;
+  - `deferred` for known, and deliberately not now;
+  - more rarely, `yes` or `missing` to overrule a mechanism that is
+    misreading a project.
 
-**Name.** The H1 is the concern's name: short, and meaningful to someone who
-has never seen the project. Under it, one sentence says what has to be true.
-The slug is the short form of the name.
+  Only people make decisions. An agent may propose one, but the human
+  confirms it. On the map, a decision takes precedence over an observation,
+  and `crosscut map` marks it with `*` when the latest observation
+  contradicts it. `deferred` exists only as a decision, which is how "not
+  managed" stays a human act.
 
-**User stories.** Say who needs this and what they are trying to do, with a
-concrete example of it mattering. There is often one story, and sometimes
-several with different stakeholders: the user, the on-call person, the next
-agent, the person inheriting the project. The stories are how you judge
-applicability. A project none of the stories touch is `n/a`.
+## The mechanism: choose the lowest tier that works
 
-**What it looks like here.** The same concern takes a different form in a
-CLI, a site, a database, a library or a scheduled job. Say what it looks like
-in the kinds of project this map covers. This section keeps a refresh from
-checking for one particular file when the concern is really about a
-capability.
+Every mechanism answers the same question: **for this one project, what is
+its status, and what is the evidence?** It answers with one line:
 
-**How to look.** This is the mechanism, and it should be the lightest strong
-one:
-1. Could the concern disappear? If a redesign would remove it, say so.
-2. Is the good property structural? Then just confirm the structure still
-   holds.
-3. Is there a mature existing tool? Name the command.
-4. Is there a small custom script? Keep it in `concerns/<slug>/`, and only
-   while it is high-signal and cheap to maintain.
-5. What still needs judgment? Write that part as a strong prompt.
+```
+<status>: <evidence>          status is yes, partly, missing, n/a or unknown
+```
 
-Keep this section stable. A refresh does not rewrite it; reconsideration
-does.
+Use `unknown: <why>` when the mechanism cannot tell, for example when a
+project is not checked out or a tool is not logged in. That is an honest
+answer. A mechanism that crashes, times out or prints anything else is a
+broken mechanism. CrossCut keeps the previous row and reports the failure.
 
-**Current view.** It is always the last section, headed
-`## Current view — <date>`. Each refresh replaces it whole, and git keeps the
-earlier maps.
+**Tier 0 is a question, not a mechanism.** Before writing any check, ask
+whether the concern could disappear through design, or whether the good
+property could become structural. An example is one shared release workflow
+that gives every tool a version file.
 
-1. **One headline sentence** saying what is most worth knowing now.
-   `crosscut list` shows only this sentence.
-2. **The map:** a table whose first column is headed `project`, with one row
-   per project from `projects.md` that the concern could touch. The second
-   cell starts with one of these words, followed by a colon and the
-   specifics:
-   - **yes**: meets it. Say how, because how is what siblings can copy.
-   - **partly**: meets some of it. Say which part is missing.
-   - **missing**: the stories apply and nothing meets them.
-   - **n/a**: none of the stories apply here. Say why.
-   - **deferred**: known, and deliberately not now. Say who decided, and
-     why.
-   - **unknown**: could not see. Say why: not checked out, no access, or a
-     question only the human can answer.
+**Tier 1: an off-the-shelf tool does the judging.** `check` is a few lines of
+glue around a mature program such as `gh`, `curl`, `cargo metadata`, a
+linter or a package auditor. The program knows the answer, and the glue only
+translates it into a status line. Prefer this whenever it genuinely answers
+the question.
 
-   These words keep the distinctions that matter: `n/a` is not `yes`,
-   `unknown` is not `missing`, and `deferred` is not forgotten. There is no
-   score, and no total.
-3. **Across projects:** what the map shows that no single row does:
-   - one project has it and its siblings do not;
-   - the same thing solved several ways;
-   - nobody has it;
-   - the lightest way to give it to all of them at once.
+**Tier 2: a custom check.** When no existing tool answers the question but
+the property really is mechanical, write `check` yourself. The bar is high,
+because this is code you now maintain:
+- It needs fixtures (below) that cover every rule it applies, with at least
+  one true positive and one true negative.
+- It is software, so it sits on the map too: its tests, and whether it
+  still earns its place.
+- Rules keyed to today's file layout, or a growing pile of patterns, are a
+  sign that the concern needs judgment instead.
+- A check that turns noisy should be replaced, or moved up to tier 3.
 
-   This is usually the most valuable part.
-4. **Since last map:** what changed. Read the previous map before replacing
-   it.
-5. **Noticed along the way:** only if a refresh touched a concern that is
-   not represented yet. Defects you trip over can go here in one line each.
-   They are not the product.
+**Tier 3: a prompt check.** When the property really takes judgment, write
+`check.md` instead. It is the instruction a coding agent follows for one
+project: what to read, what to try, what counts as evidence, and when to say
+`unknown`.
+- CrossCut runs one agent per cell, and passes the doctrine, the concern,
+  and the project's siblings with it.
+- A prompt check is easy to write, and just as much in need of fixtures.
+  `crosscut test --agentic` runs them, at the cost of model calls.
 
-Keep it short. A map plus a few bullets is typical. If a view keeps growing
-past a few hundred words, the concern is probably several concerns.
+A check runs in the project's directory, with these in its environment:
+- `CROSSCUT_PROJECT`, the project's name;
+- `CROSSCUT_PROJECT_DIR`, its directory;
+- `CROSSCUT_PROJECTS`, one `name<TAB>dir` line per sibling, for concerns
+  that compare projects;
+- `CROSSCUT_CONCERN_DIR`, so a check can find files kept next to it.
 
-## The complexity tax
+Checks are trusted like any script in the repository, so run only ones you
+trust.
 
-The complexity tax concern (see [catalogue.md](catalogue.md)) is a different
-kind. Its map rows can say whether each project's reasons are discoverable,
-but its substance is a list of specific things that no longer seem to earn
-their place. Each one is a candidate for deletion, with the reason it seemed
-to exist and why that reason looks gone.
+## Fixtures
+
+```
+fixtures/<case>/<project>/...     one small invented project per directory
+fixtures/<case>/expect            one `<project> <status>` line per project
+```
+
+A case is a tiny invented ecosystem. Make each project the smallest thing
+that exercises one rule, such as a site with a version file, or one without.
+Include the tricky kinds: a project the concern does not apply to, and
+something that looks right but is not. `crosscut test` runs each mechanism
+against its fixtures and reports every disagreement.
+
+## `observed.tsv`
+
+This file is written by `crosscut check`, and is never edited by hand. It
+has one row per project, sorted: `project, status, since, evidence`.
+- `since` moves only when the status changes.
+- A prompt check whose status is unchanged keeps its old wording.
+
+So rerunning an unchanged world produces no diff, and the file's git
+history *is* the history of the map. Commit it together with the work that
+changed it, so that a reviewer sees, for example, `larder missing → yes`
+next to the code that did it.
 
 ## Deleting
 
-When a concern stops earning attention, delete the file and its helper
-directory, and say why in the commit message. Git remembers, so do not keep
-an archive of dead concerns.
+When a concern stops earning attention, delete its directory, and say why in
+the commit message. Git remembers, so do not keep an archive of dead
+concerns.
 
 ## `crosscut/README.md` template
 
@@ -173,12 +168,13 @@ part of what it must carry.
 ```markdown
 # CrossCut concerns
 
-Each file in `concerns/` is a cross-cutting concern of <this project / these
-projects>: something generally useful that has to be true for people's needs
-to be met, such as knowing what version is live, or staying current. Each
-file says which user stories the concern serves, what it looks like here, how
-to look, and gives a dated map of where each project in `projects.md` stands.
-Git history holds the earlier maps.
+Each directory in `concerns/` is a cross-cutting concern of <this project /
+these projects>: something generally useful that has to be true for people's
+needs to be met, such as knowing what version is live, or staying current.
+`concern.md` says which user stories it serves, what it looks like here, and
+what people have decided about it. `check` or `check.md` is how to observe
+it for one project. `observed.tsv` holds the latest observations, and its
+git history is the history of the map. `projects` lists the projects.
 
 These are visibility and food for thought, not obligations. Any gap can be
 filled, deferred, accepted as a trade-off, designed away, or ignored. A map
@@ -191,23 +187,23 @@ score.
   Unknown is not bad. Not applicable is not good. Deferred is not forgotten.
 - **The map is the point.** The most useful things it shows are a capability
   one project has and its siblings lack, the same thing solved several ways,
-  and the thing nobody does. Propose new concerns when you find them.
-- **Get each map the lightest strong way:**
-  1. Make the concern disappear through design, or make the good property
-     structural.
+  and the thing nobody does.
+- **Observe each concern the lightest strong way:**
+  1. Make it disappear through design, or make the good property structural.
   2. Otherwise use a mature existing tool.
-  3. Otherwise use a small script, but only if it is high-signal and
-     low-maintenance.
-  4. Use judgment where judgment is what the question needs.
+  3. Otherwise use custom code, but only if it is high-signal,
+     low-maintenance and tested against fixtures.
+  4. Use a judgment prompt where judgment is what the question needs, and
+     test it too.
 - **Concerns and their mechanisms change, shrink and get deleted.** Anything
   still here should have a reason to be here.
 
-## Refreshing
+## Running it
 
-To refresh a concern, follow its "How to look" section and replace its
-"Current view" section. Do it by hand or with a coding agent. The CrossCut
-tool can do this headless (`crosscut refresh`) and show every map as one grid
-(`crosscut map`), but nothing here depends on it.
+Without any tool, follow a concern's `check` or `check.md` for each project
+and update `observed.tsv` by hand. The CrossCut tool does it for you:
+`crosscut check` runs the machine checks, `--agentic` adds the prompt checks,
+`crosscut map` shows the grid, and `crosscut test` checks the checks.
 
 Anyone or anything that changes, extends or regenerates these files must keep
 this thinking and framing. It must also pass on the requirement to keep both

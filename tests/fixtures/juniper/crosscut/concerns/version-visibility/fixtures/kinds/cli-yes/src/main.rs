@@ -1,0 +1,1 @@
+#[command(version)] struct Cli;

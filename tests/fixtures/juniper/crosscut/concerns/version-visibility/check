@@ -1,0 +1,11 @@
+#!/bin/sh
+# Tier 2: a small custom check, one rule per kind of project. Its fixtures pin each rule.
+if [ -f Cargo.toml ]; then
+  if grep -rqs 'command(.*version' src; then echo "yes: clap derives --version"; else echo "missing: no --version flag"; fi
+elif [ -f index.html ]; then
+  if [ -f version.json ] && grep -q '"commit"' version.json; then echo "yes: version.json names the commit"
+  elif [ -f version.json ]; then echo "partly: version.json has no commit"
+  else echo "missing: no version.json"; fi
+else
+  echo "missing: no way to see which version ran"
+fi

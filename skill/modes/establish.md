@@ -1,46 +1,71 @@
 # Establish: make one concern persistent
 
-The human said something like "I care about knowing whether these can be
-recovered", or you proposed a concern and they agreed. Understand the concern
-properly before adding anything.
+The human said something like "I want every tool to stay current", or you
+proposed a concern and they agreed. Understand the concern before you build
+anything, then give it the cheapest mechanism that genuinely answers it, and
+test that mechanism.
 
-## Understand the concern
+## 1. Understand the concern
 
 - **Name the concern, not a mechanism.** "Version visibility", not "has a
   version.json". The concern is the need, and the file is one way a site can
   meet it.
 - **Write the user stories.** Who needs this, doing what? Give a concrete
-  example of it mattering. There is usually one story; add others when
-  different stakeholders need different things from it.
-- **Say what it looks like in each kind of project.** How does a CLI meet
-  it? A site? A library? A database? This is what lets one concern span a
-  varied ecosystem.
+  example of it mattering. Add stories for other stakeholders when they need
+  something different from it.
+- **Say what it looks like in each kind of project here**: CLI, site,
+  library, job, deployment.
 - **Say what would make us stop caring.** That tells you when to delete it.
 
-## Choose the mechanism: climb down the ladder
+Write `concern.md` (see [../concern-files.md](../concern-files.md)).
 
-1. **Can the concern disappear?** For example, remove the state or the
-   manual step.
-2. **Can it become structural?** A shared release workflow that gives every
-   tool a version file fills a whole row of the map, and stays filled.
-3. **Does a mature tool already answer it?** Name the command.
-4. **Would a small custom script give high signal at low maintenance?** Keep
-   it in `concerns/<slug>/`. Regexes against today's layout are a sign that
-   an agent is the better mechanism.
-5. **What needs judgment?** Write that part of "How to look" as an excellent
-   prompt.
+## 2. Choose the mechanism: the lowest tier that works
 
-Most concerns are mixed: a few cheap facts per project, then judgment over
-them. Do not spend model calls on what `git`, `gh` or `curl` can report, and
-do not build machinery for what a model judges well.
+- **Tier 0: can the concern disappear, or become structural?** If one shared
+  change would make the property true everywhere, and keep it true, propose
+  that change. The check that follows it can be trivial.
+- **Tier 1: does a mature tool already answer it?** For example `gh`,
+  `curl`, `cargo metadata`, a linter, or a package auditor. Write `check`
+  as a few lines of glue that turn its answer into `<status>: <evidence>`.
+  This is the default whenever it genuinely works.
+- **Tier 2: is it mechanical, but nothing answers it?** Write a custom
+  `check`. The bar is high:
+  - every rule it applies gets a fixture;
+  - it must still work after files move;
+  - it must rarely raise false alarms;
+  - it must not miss the cases that matter.
 
-## Write it and map it once
+  If you find yourself matching patterns against today's layout, stop: the
+  concern probably needs tier 3.
+- **Tier 3: does it really take judgment?** Write `check.md`: the
+  instruction an agent follows for one project. Say what to read, what to
+  try, what counts as evidence, and when to answer `unknown`. A cheap model
+  often suffices, so say so.
 
-Create `crosscut/concerns/<slug>.md` following
-[../concern-files.md](../concern-files.md). Then do the first refresh
-yourself, as in [refresh.md](refresh.md), so that the file ends with a real
-map.
+A tier 3 check whose answers have become predictable is a candidate to move
+down to tier 1 or 2 (see [reconsider.md](reconsider.md)).
 
-The first map often shows that the concern was framed wrong: too narrow, too
-broad, or tied to one mechanism. If so, fix the framing now. It is cheap now
-and expensive later.
+## 3. Write fixtures, and make the mechanism pass them
+
+Create `fixtures/<case>/`: small invented projects, one per rule or tricky
+kind, and an `expect` file of `<project> <status>` lines. Include:
+- a project that meets the concern;
+- one that does not;
+- one the concern does not apply to;
+- one that looks right but is not.
+
+Run `crosscut test <slug>`, adding `--agentic` for a prompt check, which
+costs model calls. A mechanism that disagrees with its own fixtures is not
+finished. Either the mechanism or the fixture is wrong: decide which.
+
+## 4. Observe, and read the map
+
+Run `crosscut check <slug>`, adding `--agentic` for a prompt check, then run
+`crosscut map`.
+
+The first map often shows that the concern was framed wrong: too narrow,
+too broad, or tied to one mechanism. Fix the framing now, while it is cheap.
+
+Propose decisions for the rows that need one, such as `n/a` with its
+reason, but let the human confirm them. Commit `concern.md`, the mechanism,
+the fixtures and `observed.tsv` together.

@@ -1,8 +1,9 @@
-//! Black-box tests: spawn the binary against temporary concern directories.
-//! Harness runs use small shell commands in place of a real coding agent.
+//! Black-box tests: spawn the binary against a copy of Juniper, an invented ecosystem in
+//! tests/fixtures/juniper. Prompt checks use small shell commands in place of a coding agent.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use assert_cmd::Command;
 
@@ -20,38 +21,101 @@ fn crosscut() -> Command {
     cmd
 }
 
-fn stdout(cmd: &mut Command) -> String {
-    let out = cmd.assert().success().get_output().stdout.clone();
-    String::from_utf8(out).unwrap()
+fn text(out: &[u8]) -> String {
+    String::from_utf8(out.to_vec()).unwrap()
 }
 
-const RECOVERY: &str = "# Can we get back the photos after losing the server?\n\n\
-## Why this matters here\n\nFamily photos exist only on the home server.\n\n\
-## How to look\n\n- `restic snapshots`\n\n\
-## Current view — 2026-01-01\n\nUnknown: backups were never checked.\n";
-
-const VERSION: &str =
-    "# Can we tell what is deployed?\n\n## Why this matters here\n\nManual deploys.\n";
-
-fn ecosystem() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    let concerns = dir.path().join("crosscut/concerns");
-    fs::create_dir_all(&concerns).unwrap();
-    fs::write(concerns.join("recovery.md"), RECOVERY).unwrap();
-    fs::write(concerns.join("version.md"), VERSION).unwrap();
-    dir
+/// A private copy of Juniper; checks write observations into it.
+struct Juniper {
+    _dir: tempfile::TempDir,
+    root: PathBuf,
 }
 
-fn read(root: &Path, slug: &str) -> String {
-    fs::read_to_string(root.join(format!("crosscut/concerns/{slug}.md"))).unwrap()
+impl Juniper {
+    fn new() -> Juniper {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("juniper");
+        copy(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/juniper"),
+            &root,
+        );
+        Juniper { _dir: dir, root }
+    }
+
+    fn run(&self, args: &[&str]) -> assert_cmd::assert::Assert {
+        crosscut()
+            .args(args)
+            .current_dir(self.root.join("projects/larder"))
+            .assert()
+    }
+
+    fn ok(&self, args: &[&str]) -> String {
+        text(&self.run(args).success().get_output().stdout)
+    }
+
+    fn concern(&self, slug: &str) -> PathBuf {
+        self.root.join("crosscut/concerns").join(slug)
+    }
+
+    fn observed(&self, slug: &str) -> String {
+        fs::read_to_string(self.concern(slug).join("observed.tsv")).unwrap_or_default()
+    }
+
+    fn row(&self, slug: &str, project: &str) -> Vec<String> {
+        self.observed(slug)
+            .lines()
+            .find(|l| l.starts_with(&format!("{project}\t")))
+            .unwrap_or_else(|| panic!("no {project} row in {slug}:\n{}", self.observed(slug)))
+            .split('\t')
+            .map(String::from)
+            .collect()
+    }
+
+    fn write_check(&self, slug: &str, script: &str) {
+        let path = self.concern(slug).join("check");
+        fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
+        make_executable(&path);
+    }
 }
+
+fn copy(from: &Path, to: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), &target).unwrap();
+        }
+    }
+}
+
+fn make_executable(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+}
+
+fn today() -> String {
+    jiff::Zoned::now().date().to_string()
+}
+
+/// A stand-in coding agent: answers the recoverable-state prompt by project name.
+const FAKE_AGENT: &str = "p=$(cat); case \"$p\" in \
+    *'Project: `nightly-sync`'*) echo 'thinking...'; echo '<crosscut-cell>partly: copies nightly, never restored</crosscut-cell>';; \
+    *) echo '<crosscut-cell>n/a: holds nothing beyond git</crosscut-cell>';; esac";
+
+// --- The skill -------------------------------------------------------------------------
 
 #[test]
 fn bare_invocation_orients_an_agent_with_the_doctrine() {
-    let out = stdout(&mut crosscut());
-    assert!(out.contains("## Doctrine"), "{out}");
+    let out = text(&crosscut().assert().success().get_output().stdout);
     assert!(flat(&out).contains(CARRY_FORWARD), "{out}");
     assert!(out.contains("crosscut prompt setup"), "{out}");
+    assert!(out.contains("crosscut check"), "{out}");
 }
 
 #[test]
@@ -64,7 +128,14 @@ fn every_mode_prompt_carries_the_doctrine_and_its_references() {
         "reconsider",
         "generalize",
     ] {
-        let out = stdout(crosscut().args(["prompt", mode]));
+        let out = text(
+            &crosscut()
+                .args(["prompt", mode])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        );
         assert!(
             flat(&out).contains(CARRY_FORWARD),
             "{mode} prompt lost the carry-forward requirement"
@@ -72,32 +143,34 @@ fn every_mode_prompt_carries_the_doctrine_and_its_references() {
         assert!(out.contains(&format!("<!-- modes/{mode}.md -->")), "{mode}");
         assert!(!out.starts_with("---"), "{mode} prompt leaked frontmatter");
     }
-    assert!(stdout(crosscut().args(["prompt", "setup"])).contains("<!-- reservoirs.md -->"));
-    assert!(stdout(crosscut().args(["prompt", "refresh"])).contains("<!-- concern-files.md -->"));
+    for mode in ["setup", "discover"] {
+        let out = text(
+            &crosscut()
+                .args(["prompt", mode])
+                .assert()
+                .success()
+                .get_output()
+                .stdout,
+        );
+        assert!(out.contains("<!-- catalogue.md -->"), "{mode}");
+        assert!(flat(&out).contains("This is not a bug hunt"), "{mode}");
+    }
 }
 
 #[test]
 fn unknown_mode_names_the_real_ones() {
-    let out = crosscut()
-        .args(["prompt", "audit"])
-        .assert()
-        .code(2)
-        .get_output()
-        .stderr
-        .clone();
-    let err = String::from_utf8(out).unwrap();
+    let err = text(
+        &crosscut()
+            .args(["prompt", "audit"])
+            .assert()
+            .code(2)
+            .get_output()
+            .stderr,
+    );
     assert!(
         err.contains("setup, discover, establish, refresh, reconsider, generalize"),
         "{err}"
     );
-}
-
-#[test]
-fn readme_template_carries_the_framing_and_the_requirement_to_carry_it() {
-    let out = stdout(crosscut().args(["prompt", "setup"]));
-    assert!(out.contains("not obligations"), "{out}");
-    assert!(flat(&out)
-        .contains("must also pass on the requirement to keep both the thinking and framing and this requirement"));
 }
 
 #[test]
@@ -115,383 +188,384 @@ fn install_skill_writes_every_file() {
         "catalogue.md",
         "reservoirs.md",
         "modes/setup.md",
-        "modes/generalize.md",
     ] {
         assert!(target.join(file).is_file(), "{file} missing");
     }
-    assert!(fs::read_to_string(target.join("SKILL.md"))
-        .unwrap()
-        .starts_with("---\nname: crosscut\n"));
 }
 
 #[test]
-fn list_shows_questions_and_view_dates_from_a_subdirectory() {
-    let eco = ecosystem();
-    let sub = eco.path().join("crosscut/concerns");
-    let out = stdout(crosscut().arg("list").current_dir(&sub));
-    assert!(
-        out.contains("recovery  Can we get back the photos after losing the server?"),
-        "{out}"
-    );
-    assert!(
-        out.contains("2026-01-01: Unknown: backups were never checked."),
-        "{out}"
-    );
-    assert!(
-        out.contains("version   Can we tell what is deployed?"),
-        "{out}"
-    );
-    assert!(out.contains("no view yet"), "{out}");
+fn readme_site_and_directory_template_carry_the_requirement_to_carry_the_doctrine() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let readme = flat(&fs::read_to_string(root.join("README.md")).unwrap());
+    assert!(readme
+        .contains("must pass on the requirement to keep both the framing and this requirement"));
+    let site = flat(&fs::read_to_string(root.join("docs/index.html")).unwrap());
+    assert!(site.contains("the requirement to pass on both the doctrine and this requirement"));
+    let template = flat(&fs::read_to_string(root.join("skill/concern-files.md")).unwrap());
+    assert!(template.contains("must also pass on the requirement to keep both the thinking and framing and this requirement"));
 }
 
-#[test]
-fn list_outside_any_crosscut_directory_says_how_to_start() {
-    let dir = tempfile::tempdir().unwrap();
-    let out = crosscut()
-        .arg("list")
-        .current_dir(dir.path())
-        .assert()
-        .code(2)
-        .get_output()
-        .stderr
-        .clone();
-    assert!(String::from_utf8(out)
-        .unwrap()
-        .contains("crosscut prompt setup"));
-}
+// --- check: observations ---------------------------------------------------------------
 
 #[test]
-fn refresh_replaces_only_the_view_and_keeps_the_definition() {
-    let eco = ecosystem();
-    let harness = "cat > prompt.txt; printf 'thinking...\\n<crosscut-view>\\n## Current view — 2026-09-28\\n\\nApplies strongly. Last snapshot 3 days old.\\n</crosscut-view>\\n'";
-    let out = stdout(
-        crosscut()
-            .args(["refresh", "recovery", "--harness", harness])
-            .current_dir(eco.path()),
-    );
-    assert!(out.contains("recovery: view updated"), "{out}");
-
-    let text = read(eco.path(), "recovery");
-    assert!(
-        text.starts_with(RECOVERY.split("## Current view").next().unwrap().trim_end()),
-        "{text}"
-    );
-    assert!(text.contains("Last snapshot 3 days old."), "{text}");
-    assert!(!text.contains("never checked"), "old view kept: {text}");
-    assert_eq!(text.matches("## Current view").count(), 1, "{text}");
-    assert_eq!(
-        read(eco.path(), "version"),
-        VERSION,
-        "unselected concern changed"
-    );
-
-    let prompt = fs::read_to_string(eco.path().join("prompt.txt")).unwrap();
-    assert!(
-        flat(&prompt).contains(CARRY_FORWARD),
-        "headless prompt lost the doctrine"
-    );
-    assert!(
-        prompt.contains("Family photos exist only on the home server."),
-        "concern text missing"
-    );
-    assert!(prompt.contains("Do not modify any files."));
-}
-
-#[test]
-fn refresh_adds_a_view_to_a_concern_that_has_none() {
-    let eco = ecosystem();
-    let harness = "cat >/dev/null; echo '<crosscut-view>'; echo 'Unknown: no deploy access.'; echo '</crosscut-view>'";
-    crosscut()
-        .args(["refresh", "version", "--harness", harness])
-        .current_dir(eco.path())
-        .assert()
-        .success();
-    let text = read(eco.path(), "version");
-    assert!(text.starts_with(VERSION.trim_end()), "{text}");
-    assert!(
-        text.contains("\n\n## Current view — 20"),
-        "heading not added: {text}"
-    );
-    assert!(text.ends_with("Unknown: no deploy access.\n"), "{text}");
-}
-
-#[test]
-fn one_concern_failing_to_run_does_not_stop_the_others() {
-    let eco = ecosystem();
-    // Fails for the recovery prompt, succeeds for the version prompt.
-    let harness = "if grep -q 'Family photos exist only'; then echo 'not logged in' >&2; exit 3; fi; \
-                   echo '<crosscut-view>'; echo '## Current view — x'; echo; echo 'ok'; echo '</crosscut-view>'";
-    let assert = crosscut()
-        .args(["refresh", "--harness", harness])
-        .current_dir(eco.path())
-        .assert()
-        .code(1);
-    let err = String::from_utf8(assert.get_output().stderr.clone()).unwrap();
-    assert!(err.contains("recovery: harness exited"), "{err}");
-    assert!(err.contains("not logged in"), "{err}");
-    assert_eq!(
-        read(eco.path(), "recovery"),
-        RECOVERY,
-        "failed refresh touched the file"
-    );
-    assert!(read(eco.path(), "version").ends_with("## Current view — x\n\nok\n"));
-}
-
-#[test]
-fn a_harness_that_exits_zero_without_a_view_leaves_the_file_alone_and_says_why() {
-    let eco = ecosystem();
-    let assert = crosscut()
-        .args([
-            "refresh",
-            "recovery",
-            "--harness",
-            "cat >/dev/null; printf '\\033[91mError: \\033[0mModel not found\\n' >&2",
-        ])
-        .current_dir(eco.path())
-        .assert()
-        .code(2);
-    let err = String::from_utf8(assert.get_output().stderr.clone()).unwrap();
-    assert!(err.contains("left unchanged"), "{err}");
-    assert!(
-        err.contains("Error: Model not found"),
-        "harness stderr hidden or garbled: {err}"
-    );
-    assert_eq!(read(eco.path(), "recovery"), RECOVERY);
-}
-
-#[test]
-fn refresh_without_any_harness_explains_what_to_install() {
-    let eco = ecosystem();
-    let assert = crosscut()
-        .arg("refresh")
-        .env("PATH", "")
-        .current_dir(eco.path())
-        .assert()
-        .code(2);
-    let err = String::from_utf8(assert.get_output().stderr.clone()).unwrap();
-    assert!(err.contains("no coding harness found"), "{err}");
-}
-
-#[test]
-fn unknown_slug_is_rejected_before_anything_runs() {
-    let eco = ecosystem();
-    crosscut()
-        .args(["refresh", "nope", "--harness", "touch ran"])
-        .current_dir(eco.path())
-        .assert()
-        .code(2);
-    assert!(!eco.path().join("ran").exists());
-}
-
-#[test]
-fn dry_run_shows_the_command_and_prompt_without_running() {
-    let eco = ecosystem();
-    let out = stdout(
-        crosscut()
-            .args(["refresh", "--dry-run", "--harness", "codex"])
-            .current_dir(eco.path()),
-    );
-    assert!(out.contains("codex exec --sandbox read-only"), "{out}");
-    assert!(out.contains("===== prompt for recovery ====="), "{out}");
-    assert!(out.contains("===== prompt for version ====="), "{out}");
-    assert_eq!(read(eco.path(), "recovery"), RECOVERY);
-}
-
-#[test]
-fn a_hung_harness_is_stopped_at_the_timeout_and_the_file_kept() {
-    let eco = ecosystem();
-    let assert = crosscut()
-        .args([
-            "refresh",
-            "recovery",
-            "--timeout",
-            "0",
-            "--harness",
-            "sleep 30",
-        ])
-        .current_dir(eco.path())
-        .timeout(std::time::Duration::from_secs(10))
-        .assert()
-        .code(2);
-    let err = String::from_utf8(assert.get_output().stderr.clone()).unwrap();
-    assert!(err.contains("was stopped"), "{err}");
-    assert_eq!(read(eco.path(), "recovery"), RECOVERY);
-}
-
-#[test]
-fn a_view_heading_inside_a_code_fence_is_not_the_view() {
-    let eco = ecosystem();
-    let fenced =
-        format!("{VERSION}\n## How to look\n\n```markdown\n## Current view — example\n```\n");
-    fs::write(eco.path().join("crosscut/concerns/version.md"), &fenced).unwrap();
-    let out = stdout(crosscut().arg("list").current_dir(eco.path()));
-    assert!(out.contains("no view yet"), "{out}");
-    let harness = "cat >/dev/null; echo '<crosscut-view>'; echo real; echo '</crosscut-view>'";
-    crosscut()
-        .args(["refresh", "version", "--harness", harness])
-        .current_dir(eco.path())
-        .assert()
-        .success();
-    let text = read(eco.path(), "version");
-    assert!(
-        text.starts_with(fenced.trim_end()),
-        "fenced example was cut: {text}"
-    );
-    assert!(text.ends_with("real\n"), "{text}");
-}
-
-#[test]
-fn model_is_passed_to_known_harnesses_and_refused_for_custom_commands() {
-    let eco = ecosystem();
-    let out = stdout(
-        crosscut()
-            .args([
-                "refresh",
-                "--dry-run",
-                "--harness",
-                "claude",
-                "--model",
-                "haiku",
-            ])
-            .current_dir(eco.path()),
-    );
-    assert!(out.contains("--model haiku"), "{out}");
-    assert!(
-        out.contains("--setting-sources user"),
-        "target project settings would load: {out}"
-    );
+fn check_runs_machine_tiers_and_writes_sorted_observations() {
+    let j = Juniper::new();
+    let assert = j.run(&["check"]).success();
+    let out = text(&assert.get_output().stdout);
+    let err = text(&assert.get_output().stderr);
     assert!(
         out.contains(
-            "--disallowedTools Edit,Write,NotebookEdit,Agent,Workflow --strict-mcp-config"
+            "staying-current/larder: (none) → missing: Cargo.toml has no self-update mechanism"
         ),
         "{out}"
     );
-    let out = stdout(
-        crosscut()
+    assert!(
+        out.contains("8 cells checked: 8 changed, 0 could not run"),
+        "{out}"
+    );
+    assert!(
+        err.contains("recoverable-state: prompt check not run (add --agentic"),
+        "{err}"
+    );
+    assert!(
+        j.observed("recoverable-state").is_empty(),
+        "a prompt check ran without --agentic"
+    );
+
+    let observed = j.observed("staying-current");
+    let lines: Vec<&str> = observed.lines().collect();
+    assert_eq!(lines[0], "project\tstatus\tsince\tevidence");
+    let projects: Vec<&str> = lines[1..]
+        .iter()
+        .map(|l| l.split('\t').next().unwrap())
+        .collect();
+    assert_eq!(
+        projects,
+        ["larder", "ledger-web", "nightly-sync", "pantry"],
+        "rows must be sorted"
+    );
+    assert_eq!(
+        j.row("staying-current", "pantry"),
+        ["pantry", "yes", &today(), "uses the self_update crate"]
+    );
+}
+
+#[test]
+fn rerunning_an_unchanged_world_changes_nothing() {
+    let j = Juniper::new();
+    j.ok(&["check"]);
+    let first = j.observed("version-visibility");
+    let out = j.ok(&["check"]);
+    assert!(out.contains("0 changed"), "{out}");
+    assert_eq!(j.observed("version-visibility"), first);
+}
+
+#[test]
+fn a_change_in_one_project_moves_only_its_row_and_its_date() {
+    let j = Juniper::new();
+    j.ok(&["check"]);
+    let path = j.concern("staying-current").join("observed.tsv");
+    fs::write(
+        &path,
+        j.observed("staying-current")
+            .replace(&today(), "2026-01-01"),
+    )
+    .unwrap();
+    let manifest = j.root.join("projects/larder/Cargo.toml");
+    fs::write(
+        &manifest,
+        fs::read_to_string(&manifest).unwrap() + "self_update = \"0.41\"\n",
+    )
+    .unwrap();
+
+    let out = j.ok(&["check", "staying-current", "--project", "larder"]);
+    assert!(
+        out.contains("staying-current/larder: missing → yes: uses the self_update crate"),
+        "{out}"
+    );
+    assert!(out.contains("1 cells checked"), "{out}");
+    assert_eq!(
+        j.row("staying-current", "larder")[1..3],
+        ["yes".to_string(), today()]
+    );
+    assert_eq!(
+        j.row("staying-current", "pantry")[2],
+        "2026-01-01",
+        "an unchanged row kept its date"
+    );
+}
+
+#[test]
+fn a_failing_mechanism_keeps_the_previous_row_and_says_so() {
+    let j = Juniper::new();
+    j.ok(&["check"]);
+    let before = j.observed("staying-current");
+    j.write_check("staying-current", "echo 'gh: not logged in' >&2; exit 4");
+    let err = text(
+        &j.run(&["check", "staying-current"])
+            .code(1)
+            .get_output()
+            .stderr,
+    );
+    assert!(
+        err.contains("staying-current/pantry: check failed, previous row kept: exited with"),
+        "{err}"
+    );
+    assert!(err.contains("gh: not logged in"), "{err}");
+    assert_eq!(j.observed("staying-current"), before);
+}
+
+#[test]
+fn a_mechanism_may_only_observe_and_never_decide() {
+    let j = Juniper::new();
+    j.write_check("staying-current", "echo 'deferred: not now'");
+    let err = text(
+        &j.run(&["check", "staying-current"])
+            .code(1)
+            .get_output()
+            .stderr,
+    );
+    assert!(err.contains("only a person's decision can record"), "{err}");
+    j.write_check("staying-current", "echo 'maybe: who knows'");
+    let err = text(
+        &j.run(&["check", "staying-current"])
+            .code(1)
+            .get_output()
+            .stderr,
+    );
+    assert!(
+        err.contains("does not start with yes, partly, missing, n/a, unknown"),
+        "{err}"
+    );
+    j.write_check("staying-current", "echo 'unknown: registry unreachable'");
+    j.ok(&["check", "staying-current"]);
+    assert_eq!(j.row("staying-current", "larder")[1], "unknown");
+}
+
+#[test]
+fn checks_run_in_the_project_and_can_see_their_siblings() {
+    let j = Juniper::new();
+    j.write_check(
+        "staying-current",
+        "[ \"$(pwd)\" = \"$CROSSCUT_PROJECT_DIR\" ] || exit 9; n=$(printf '%s\\n' \"$CROSSCUT_PROJECTS\" | wc -l); echo \"yes: $CROSSCUT_PROJECT sees $n projects\"",
+    );
+    j.ok(&["check", "staying-current"]);
+    assert_eq!(
+        j.row("staying-current", "ledger-web")[3],
+        "ledger-web sees 4 projects"
+    );
+}
+
+#[test]
+fn a_project_removed_from_the_inventory_loses_its_rows() {
+    let j = Juniper::new();
+    j.ok(&["check"]);
+    fs::write(
+        j.root.join("crosscut/projects"),
+        "projects/pantry\nprojects/larder\nprojects/ledger-web\n",
+    )
+    .unwrap();
+    j.ok(&["check"]);
+    assert!(
+        !j.observed("staying-current").contains("nightly-sync"),
+        "{}",
+        j.observed("staying-current")
+    );
+}
+
+#[test]
+fn a_hung_check_is_stopped_at_the_timeout() {
+    let j = Juniper::new();
+    j.write_check("staying-current", "sleep 30");
+    let started = Instant::now();
+    let err = text(
+        &crosscut()
             .args([
-                "refresh",
-                "--dry-run",
-                "--harness",
-                "opencode",
-                "--model",
-                "x/y",
+                "check",
+                "staying-current",
+                "--project",
+                "pantry",
+                "--timeout",
+                "1",
             ])
-            .current_dir(eco.path()),
+            .current_dir(&j.root)
+            .timeout(Duration::from_secs(15))
+            .assert()
+            .code(1)
+            .get_output()
+            .stderr,
     );
-    assert!(out.contains("opencode -m x/y run <prompt>"), "{out}");
-    crosscut()
-        .args(["refresh", "--harness", "cat", "--model", "haiku"])
-        .current_dir(eco.path())
-        .assert()
-        .code(2);
+    assert!(err.contains("was stopped"), "{err}");
+    assert!(started.elapsed() < Duration::from_secs(10));
 }
 
 #[test]
-fn concerns_are_refreshed_concurrently_up_to_jobs() {
-    let eco = ecosystem();
-    for slug in ["a", "b", "c", "d"] {
-        fs::write(
-            eco.path().join(format!("crosscut/concerns/{slug}.md")),
-            format!("# {slug}?\n"),
-        )
-        .unwrap();
+fn cells_run_concurrently_up_to_jobs() {
+    let j = Juniper::new();
+    j.write_check("staying-current", "sleep 1; echo 'yes: slow'");
+    let started = Instant::now();
+    j.ok(&["check", "staying-current", "--jobs", "4"]);
+    assert!(
+        started.elapsed() < Duration::from_millis(2500),
+        "four one-second cells took {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn unknown_concerns_and_projects_are_refused_before_anything_runs() {
+    let j = Juniper::new();
+    let err = text(&j.run(&["check", "nope"]).code(2).get_output().stderr);
+    assert!(err.contains("no concern `nope`"), "{err}");
+    let err = text(
+        &j.run(&["check", "--project", "nope"])
+            .code(2)
+            .get_output()
+            .stderr,
+    );
+    assert!(
+        err.contains("known: larder, ledger-web, nightly-sync, pantry"),
+        "{err}"
+    );
+    assert!(j.observed("staying-current").is_empty());
+}
+
+// --- check: prompt checks --------------------------------------------------------------
+
+#[test]
+fn prompt_checks_run_with_agentic_one_agent_per_cell() {
+    let j = Juniper::new();
+    let out = j.ok(&[
+        "check",
+        "recoverable-state",
+        "--agentic",
+        "--harness",
+        FAKE_AGENT,
+    ]);
+    assert!(out.contains("4 cells checked"), "{out}");
+    assert_eq!(
+        j.row("recoverable-state", "nightly-sync")[1..],
+        [
+            "partly".to_string(),
+            today(),
+            "copies nightly, never restored".into()
+        ]
+    );
+    assert_eq!(j.row("recoverable-state", "pantry")[1], "n/a");
+}
+
+#[test]
+fn a_reworded_prompt_answer_with_the_same_status_changes_nothing() {
+    let j = Juniper::new();
+    j.ok(&[
+        "check",
+        "recoverable-state",
+        "--agentic",
+        "--harness",
+        FAKE_AGENT,
+    ]);
+    let before = j.observed("recoverable-state");
+    let reworded = FAKE_AGENT.replace(
+        "copies nightly, never restored",
+        "a nightly copy exists; no restore was ever done",
+    );
+    let out = j.ok(&[
+        "check",
+        "recoverable-state",
+        "--agentic",
+        "--harness",
+        &reworded,
+    ]);
+    assert!(out.contains("0 changed"), "{out}");
+    assert_eq!(j.observed("recoverable-state"), before);
+}
+
+#[test]
+fn the_cell_prompt_carries_the_doctrine_the_concern_and_the_project() {
+    let j = Juniper::new();
+    let dump = j.root.join("prompt.txt");
+    let harness = format!(
+        "cat > {}; echo '<crosscut-cell>n/a: x</crosscut-cell>'",
+        dump.display()
+    );
+    j.ok(&[
+        "check",
+        "recoverable-state",
+        "--project",
+        "nightly-sync",
+        "--agentic",
+        "--harness",
+        &harness,
+    ]);
+    let prompt = fs::read_to_string(dump).unwrap();
+    assert!(
+        flat(&prompt).contains(CARRY_FORWARD),
+        "a delegated agent must get the doctrine"
+    );
+    assert!(prompt.contains("Project: `nightly-sync`"), "{prompt}");
+    assert!(
+        prompt.contains("A copy that has never been"),
+        "check.md missing"
+    );
+    assert!(prompt.contains("# Recoverable state"), "concern.md missing");
+}
+
+#[test]
+fn without_a_harness_prompt_cells_fail_and_machine_cells_still_run() {
+    let j = Juniper::new();
+    let bin = j.root.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    #[cfg(unix)]
+    for tool in ["sh", "grep", "cat"] {
+        let real = which(tool);
+        std::os::unix::fs::symlink(real, bin.join(tool)).unwrap();
     }
-    let harness =
-        "cat >/dev/null; sleep 1; echo '<crosscut-view>'; echo ok; echo '</crosscut-view>'";
-    let started = std::time::Instant::now();
-    crosscut()
-        .args(["refresh", "--jobs", "6", "--harness", harness])
-        .current_dir(eco.path())
+    let assert = crosscut()
+        .args(["check", "--agentic"])
+        .env("PATH", &bin)
+        .current_dir(&j.root)
         .assert()
-        .success();
-    let elapsed = started.elapsed();
-    assert!(
-        elapsed.as_secs_f64() < 3.0,
-        "six concerns with six workers took {elapsed:?}"
-    );
-    for slug in ["a", "b", "c", "d", "recovery", "version"] {
-        assert!(
-            read(eco.path(), slug).ends_with("ok\n"),
-            "{slug} not refreshed"
-        );
-    }
-
-    let started = std::time::Instant::now();
-    crosscut()
-        .args([
-            "refresh",
-            "a",
-            "b",
-            "c",
-            "--jobs",
-            "2",
-            "--harness",
-            harness,
-        ])
-        .current_dir(eco.path())
-        .assert()
-        .success();
-    let elapsed = started.elapsed().as_secs_f64();
-    assert!(
-        (2.0..3.5).contains(&elapsed),
-        "three concerns with two workers should take two rounds, took {elapsed}s"
+        .code(1);
+    let err = text(&assert.get_output().stderr);
+    assert!(err.contains("no coding harness found"), "{err}");
+    assert_eq!(
+        j.row("staying-current", "pantry")[1],
+        "yes",
+        "machine cells must not depend on a harness"
     );
 }
 
-#[test]
-fn readme_and_site_carry_the_requirement_to_carry_the_doctrine() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let readme = flat(&fs::read_to_string(root.join("README.md")).unwrap());
-    assert!(
-        readme
-            .contains("must pass on the requirement to keep both the framing and this requirement"),
-        "README"
-    );
-    let site = flat(&fs::read_to_string(root.join("docs/index.html")).unwrap());
-    assert!(
-        site.contains("the requirement to pass on both the doctrine and this requirement"),
-        "site"
-    );
+fn which(tool: &str) -> PathBuf {
+    std::env::split_paths(&std::env::var_os("PATH").unwrap())
+        .map(|dir| dir.join(tool))
+        .find(|path| path.is_file())
+        .unwrap_or_else(|| panic!("{tool} not on PATH"))
 }
 
 #[test]
-fn list_headlines_drop_markdown_emphasis() {
-    let eco = ecosystem();
-    let text = RECOVERY.replace(
-        "Unknown: backups were never checked.",
-        "**Headline:** backups exist. Nobody has restored one.",
+fn dry_run_shows_cells_and_prompts_without_running_anything() {
+    let j = Juniper::new();
+    let out = j.ok(&["check", "--agentic", "--dry-run", "--harness", "codex"]);
+    assert!(out.contains("staying-current/pantry: run "), "{out}");
+    assert!(
+        out.contains("recoverable-state/pantry: ask codex exec --sandbox read-only"),
+        "{out}"
     );
-    fs::write(eco.path().join("crosscut/concerns/recovery.md"), text).unwrap();
-    let out = stdout(crosscut().arg("list").current_dir(eco.path()));
-    assert!(out.contains("2026-01-01: backups exist.\n"), "{out}");
+    assert!(j.observed("staying-current").is_empty());
 }
 
-#[test]
-fn map_shows_every_concern_against_every_project_in_projects_md_order() {
-    let eco = ecosystem();
-    fs::write(
-        eco.path().join("crosscut/projects.md"),
-        "# Projects\n\n- **zeta**: a CLI\n- **alpha**: a site, holds data\n",
-    )
-    .unwrap();
-    let staying_current = "# Staying current\n\n## Current view — 2026-09-28\n\nOnly zeta updates itself.\n\n\
-        | Project | Where it stands |\n|---|---|\n| **zeta** | yes: self-update on start |\n\
-        | alpha | Missing: nothing updates the deploy |\n| extra | n/a: archived |\n\n- Across projects: copy zeta's.\n";
-    fs::write(
-        eco.path().join("crosscut/concerns/staying-current.md"),
-        staying_current,
-    )
-    .unwrap();
-    let recovery = RECOVERY.replace(
-        "Unknown: backups were never checked.",
-        "Headline.\n\n| project | status |\n|---|---|\n| alpha | unknown: no access |\n| zeta | shrug |\n\n| other | table |\n|---|---|\n| zeta | yes |",
-    );
-    fs::write(eco.path().join("crosscut/concerns/recovery.md"), recovery).unwrap();
+// --- map -------------------------------------------------------------------------------
 
-    let out = stdout(crosscut().arg("map").current_dir(eco.path()));
+#[test]
+fn map_shows_every_concern_against_every_project_with_decisions() {
+    let j = Juniper::new();
+    j.ok(&["check"]);
+    let out = j.ok(&["map"]);
     let lines: Vec<&str> = out.lines().collect();
-    let header: Vec<&str> = lines[0].split_whitespace().collect();
-    assert_eq!(header, ["mapped", "zeta", "alpha", "extra"], "{out}");
+    assert_eq!(
+        lines[0].split_whitespace().collect::<Vec<_>>(),
+        ["larder", "ledger-web", "nightly-sync", "pantry"]
+    );
     let row = |slug: &str| -> Vec<&str> {
         lines
             .iter()
@@ -502,32 +576,103 @@ fn map_shows_every_concern_against_every_project_in_projects_md_order() {
     };
     assert_eq!(
         row("staying-current"),
-        ["staying-current", "2026-09-28", "yes", "missing", "n/a"],
+        ["staying-current", "missing", "n/a", "n/a", "yes"],
         "{out}"
     );
     assert_eq!(
-        row("recovery"),
-        ["recovery", "2026-01-01", "?", "unknown"],
-        "an unrecognised status shows as ?: {out}"
+        row("version-visibility"),
+        ["version-visibility", "missing", "yes", "deferred", "yes"],
+        "{out}"
     );
-    assert_eq!(row("version"), ["version", "(no", "map)"], "{out}");
+    assert_eq!(
+        row("recoverable-state"),
+        ["recoverable-state", "(not", "checked", "yet)"],
+        "{out}"
+    );
 }
 
 #[test]
-fn setup_and_discover_prompts_start_from_the_catalogue_and_refresh_asks_for_a_map() {
-    for mode in ["setup", "discover"] {
-        let out = stdout(crosscut().args(["prompt", mode]));
-        assert!(out.contains("<!-- catalogue.md -->"), "{mode}");
-        assert!(flat(&out).contains("This is not a bug hunt"), "{mode}");
-    }
-    let eco = ecosystem();
-    let out = stdout(
-        crosscut()
-            .args(["refresh", "recovery", "--dry-run", "--harness", "cat"])
-            .current_dir(eco.path()),
+fn map_marks_a_decision_the_observation_contradicts() {
+    let j = Juniper::new();
+    let definition = j.concern("staying-current").join("concern.md");
+    fs::write(
+        &definition,
+        fs::read_to_string(&definition).unwrap() + "\n- **pantry**: n/a: pantry is frozen\n",
+    )
+    .unwrap();
+    j.ok(&["check"]);
+    let out = j.ok(&["map"]);
+    assert!(out.contains("n/a*"), "{out}");
+    assert!(out.contains("contradicts: staying-current/pantry"), "{out}");
+}
+
+#[test]
+fn map_for_one_project_shows_its_column_with_evidence_and_decisions() {
+    let j = Juniper::new();
+    j.ok(&["check"]);
+    let out = j.ok(&["map", "--project", "nightly-sync"]);
+    let line = out
+        .lines()
+        .find(|l| l.starts_with("version-visibility"))
+        .unwrap();
+    assert!(line.contains("deferred"), "{out}");
+    assert!(
+        line.contains("decided: being retired once the ledger's own backups land"),
+        "{out}"
     );
     assert!(
-        flat(&out).contains("a table whose first column is headed `project`"),
+        line.contains("observed: no way to see which version ran"),
+        "{out}"
+    );
+}
+
+// --- test: mechanisms against their fixtures -------------------------------------------
+
+#[test]
+fn test_runs_machine_checks_against_their_fixtures() {
+    let j = Juniper::new();
+    let out = j.ok(&["test"]);
+    assert!(
+        out.contains("8 fixture cells: 8 as expected, 0 not"),
+        "{out}"
+    );
+    assert!(
+        out.contains("recoverable-state: prompt check, 1 fixture cases not run (use --agentic)"),
+        "{out}"
+    );
+}
+
+#[test]
+fn a_check_that_disagrees_with_its_fixtures_is_reported() {
+    let j = Juniper::new();
+    // The noisy-checker episode: a layout change makes a check report missing everywhere.
+    j.write_check(
+        "staying-current",
+        "echo 'missing: cannot find the manifest'",
+    );
+    let out = text(
+        &j.run(&["test", "staying-current"])
+            .code(1)
+            .get_output()
+            .stdout,
+    );
+    assert!(
+        out.contains("staying-current/basic/updating: expected yes, observed missing"),
+        "{out}"
+    );
+    assert!(
+        out.contains("3 fixture cells: 1 as expected, 2 not"),
+        "{out}"
+    );
+}
+
+#[test]
+fn prompt_checks_are_tested_against_fixtures_with_agentic() {
+    let j = Juniper::new();
+    let agent = "p=$(cat); case \"$p\" in *'Project: `copier`'*) echo '<crosscut-cell>partly: never restored</crosscut-cell>';; *) echo '<crosscut-cell>n/a: stateless</crosscut-cell>';; esac";
+    let out = j.ok(&["test", "recoverable-state", "--agentic", "--harness", agent]);
+    assert!(
+        out.contains("2 fixture cells: 2 as expected, 0 not"),
         "{out}"
     );
 }

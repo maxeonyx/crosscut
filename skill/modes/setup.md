@@ -3,22 +3,22 @@
 You are bringing CrossCut to a project or an ecosystem of projects: new, old,
 or someone else's. The goal is a map. It should show which cross-cutting
 concerns matter here, how each project meets them, and above all where the
-gaps are. Keep the persistent set small enough to stay alive.
+gaps are. Each concern is small, so keep every one you expect to want again, and no others.
 
 This is not a bug hunt. You will trip over defects: mention them in one
 line and move on.
 
 ## 1. Find out what is actually there
 
-List the projects and write `crosscut/projects.md` (see
-[../concern-files.md](../concern-files.md)). For each project, work out:
+List the projects in `crosscut/projects` (see
+[../concern-files.md](../concern-files.md)). For each one, work out:
 - what kind of thing it is: a CLI, a site, a service, a library, a
   deployment of upstream software, or a scheduled job;
 - who uses it;
 - what state it holds;
 - how it ships.
 
-A project you cannot reach becomes a line saying so.
+A project you cannot reach still goes in the list. Its cells will say `unknown`.
 
 Read the manifests, CI and deploy configuration, READMEs and agent guidance,
 and recent history. Run cheap commands that only look, such as `--help`,
@@ -90,8 +90,9 @@ final report.
 
 ## 5. Establish them
 
-For each chosen concern, follow [establish.md](establish.md). Create
-`crosscut/README.md` from the template in
+For each chosen concern, follow [establish.md](establish.md): definition,
+the lowest-tier mechanism that works, fixtures, and a first
+`crosscut check`. Create `crosscut/README.md` from the template in
 [../concern-files.md](../concern-files.md).
 
 Optionally, add one line to each project's agent guidance so that ordinary

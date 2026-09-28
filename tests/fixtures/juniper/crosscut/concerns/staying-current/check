@@ -1,0 +1,8 @@
+#!/bin/sh
+# Tier 1: the manifest says whether the tool uses the self_update crate.
+[ -f Cargo.toml ] || { echo "n/a: not an installed tool"; exit 0; }
+if grep -q '^self_update' Cargo.toml; then
+  echo "yes: uses the self_update crate"
+else
+  echo "missing: Cargo.toml has no self-update mechanism"
+fi

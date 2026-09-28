@@ -1,49 +1,34 @@
 # Refresh: update the map
 
-Refreshing means updating the map of a known concern. It does not mean
-judging the projects. A map that shows six of eight projects missing
-something has succeeded. So has one that could not see some projects, as
-long as those rows say `unknown` and why.
+Refreshing updates the observations. It does not judge the projects. A map
+that shows six of eight projects missing something has succeeded. So has one
+where a cell says `unknown: not checked out`.
 
-## For each concern
+## Steps
 
-1. **Read the whole file.**
-   - The user stories and "What it looks like here" say what to look for in
-     each kind of project.
-   - "How to look" says how.
-   - The previous map is your baseline.
-2. **Go project by project** through `crosscut/projects.md`.
-   - Run the cheap deterministic parts first.
-   - Then do the judgment parts properly.
-   - A project you cannot see is `unknown`, with the reason. Do not guess.
-3. **Write a new `## Current view — <today>`** following
-   [../concern-files.md](../concern-files.md):
-   - a headline;
-   - the map table;
-   - what the map shows across projects;
-   - what changed since the last map.
-4. **Do not rewrite the concern's definition during a refresh.** If "How to
-   look" is stale, or the concern looks wrongly framed, say so in the view.
-   Changing the definition is [reconsider.md](reconsider.md).
+1. **Run the machine checks.** `crosscut check` runs every tier 1 and 2
+   mechanism for every project in `crosscut/projects`. It is cheap, needs no
+   model, and is fine to run whenever you like.
+2. **Decide whether to spend model calls.** `crosscut check --agentic` also
+   runs the prompt checks, one agent per cell. Scope it with a concern slug,
+   or `--project`, when you only need part of the map.
+3. **Read what changed.** `crosscut check` prints each cell whose status
+   moved, and `git diff crosscut/` shows the rest. Then read `crosscut map`.
+4. **Treat failures as information about the mechanism, not the project.**
+   A cell that could not run keeps its previous row, and the failure is
+   printed.
+   - If a check fails everywhere, it is probably broken. Run
+     `crosscut test <slug>`, and see [reconsider.md](reconsider.md).
+   - If a decision is marked `*`, the world has moved away from what someone
+     decided. Tell the human.
+5. **Commit `observed.tsv`** together with whatever work changed it.
 
-## Refreshing many concerns
+Do not edit `observed.tsv` by hand, and do not change decisions during a
+refresh. Propose decision changes to the human instead.
 
-Refresh each concern independently: one that fails to run must not stop the
-others. If you delegate, see "Delegating" in SKILL.md, and hand each agent
-the concern file.
+## Without the tool
 
-Afterwards, `crosscut map` shows the grid. Summarize what changed in it.
-
-## Headless
-
-`crosscut refresh` runs this mode through an installed coding harness. It
-uses one agent per concern, six at a time by default (`--jobs`). It asks
-each agent for the new view only, and writes that into the file itself.
-
-"Never needs to write" is not "cannot write". The agent gets a shell so it
-can run "How to look" commands, and only Codex's read-only sandbox enforces
-the request not to change anything. Treat concern files like scripts:
-refresh only ones you trust.
-
-The exit status is about whether the refresh *ran*. It says nothing about
-what the map shows.
+Follow each concern's `check` or `check.md` for each project, and update
+`observed.tsv` by hand:
+- one sorted row per project;
+- `since` changes only when the status changes.

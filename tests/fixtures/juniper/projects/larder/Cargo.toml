@@ -1,0 +1,6 @@
+[package]
+name = "larder"
+version = "0.2.0"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }

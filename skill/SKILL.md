@@ -76,7 +76,7 @@ These are modes of thought, not a pipeline. Move between them freely.
 | "Use CrossCut here", or setting up a project or ecosystem | [modes/setup.md](modes/setup.md) |
 | "What are we not thinking about?" | [modes/discover.md](modes/discover.md) |
 | "I care about X", or making one concern persistent | [modes/establish.md](modes/establish.md) |
-| Updating the maps of known concerns | [modes/refresh.md](modes/refresh.md) |
+| Updating the map | [modes/refresh.md](modes/refresh.md) |
 | Questioning whether a concern or its mechanism should exist | [modes/reconsider.md](modes/reconsider.md) |
 | Just fixed or built something, and wondering what it reveals | [modes/generalize.md](modes/generalize.md) |
 
@@ -89,25 +89,27 @@ These are modes of thought, not a pipeline. Move between them freely.
 
 ## The one convention
 
-Concerns live in `crosscut/concerns/<slug>.md` inside whichever repository
-holds them:
+Concerns live in `crosscut/concerns/<slug>/` inside whichever repository holds
+them:
 - the project itself;
 - a wrapper repository over many projects;
 - the umbrella of a family of repositories.
 
-Each concern file contains:
-- its name;
-- the user stories it serves;
-- how it tends to appear in different kinds of project;
-- how to look;
-- the latest dated map.
+In the wrapper pattern, the projects never need to know CrossCut exists.
 
-The file is at once the definition, the refresh prompt, and the latest
-result, and git history holds the rest. `crosscut/projects.md` names the
-projects the maps cover. `crosscut/README.md` explains the directory to
-anyone who finds it.
+Each concern directory holds:
+- `concern.md`: its name, the user stories it serves, what it looks like in
+  each kind of project, and the **decisions** people have made about
+  particular projects;
+- `check`, an executable, or `check.md`, a prompt: how to observe it for one
+  project;
+- `fixtures/`: invented projects with known answers, which test that
+  mechanism;
+- `observed.tsv`: what was last observed, written by the tool and committed.
 
-Target projects never need to know CrossCut exists.
+The map is observations plus decisions. `crosscut/projects` lists the
+projects, and `crosscut/README.md` explains the directory to anyone who
+finds it.
 
 ## Working with the human
 
@@ -136,10 +138,10 @@ If `crosscut` is on `PATH`:
 
 | Command | What it does |
 |---|---|
-| `crosscut map` | Shows every concern against every project, as one grid. |
-| `crosscut list` | Shows each concern, the date of its map, and its headline. |
+| `crosscut check [slug...]` | Runs machine checks (tiers 1 and 2) per project, and records observations. `--agentic` adds prompt checks, which cost model calls. |
+| `crosscut map [--project p]` | Shows every concern against every project, combining decisions and observations. |
+| `crosscut test [slug...]` | Runs each mechanism against its fixtures. `--agentic` includes prompt checks. |
 | `crosscut prompt <mode>` | Prints the full prompt for a mode, for harnesses without skills. |
-| `crosscut refresh [slug...]` | Refreshes maps headless through an installed coding harness. |
 | `crosscut install-skill` | Installs this skill for Claude Code, Codex and OpenCode. |
 
 Nothing here requires the CLI. Everything it does, you can do with the files.

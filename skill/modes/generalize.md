@@ -9,11 +9,12 @@ in one line and move on. This must never turn every patch into process.
   live. Name the property, not the bug.
 - **What do the siblings look like on that concern?** If one tool needed the
   fix, do the others have the property, lack it, or have it in a different
-  way? A quick look across `crosscut/projects.md` is cheap.
+  way? `crosscut map` shows the row at once. If the concern is not on the map yet, look quickly across the projects.
 - **Could the property become structural for all of them at once?** Examples
   are a shared library, one reusable workflow, or a type.
-- **Is the concern on the map?** If `crosscut/concerns/` has it, note in its
-  next map what this work changed. If not, and it would be worth watching,
+- **Is the concern on the map?** If `crosscut/concerns/` has it, run
+  `crosscut check <slug>` so that the map records what this work changed,
+  and commit that with the work. If not, and it would be worth watching,
   propose it (see [establish.md](establish.md)).
 
 If something genuinely generalizes, tell the human in two or three

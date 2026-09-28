@@ -1,21 +1,38 @@
 # CrossCut
 
-CrossCut widens what a coding agent notices about software: the cross-cutting dimensions that are easy to miss on the direct path from idea to working product. Examples include recovery, version visibility, stale agent guidance, the same weakness in five sibling repos, what decays when nobody touches a project for a year, and many that no checklist would list.
+CrossCut keeps a map of the cross-cutting concerns in your projects: the generally useful things that have to be true for people's needs to be met. Examples:
+- **version visibility:** can you tell what's live?
+- **staying current:** do installed copies update themselves?
+- **recoverable state**
+- **one-step releases**
+- **a front door** that says what the project is for
+- and whatever your own ecosystem turns out to need.
 
-It keeps the worthwhile ones visible over time as plain Markdown **concern files**. Each file holds:
-- a question worth asking again;
-- why it matters in this place;
-- how to get a current view;
-- the latest dated view.
+For each concern, the map shows how every project meets it, differently or not at all. The gaps are the point. For example: one tool updates itself and its sibling doesn't, or nobody publishes a version.
 
-Git keeps the history. The views are food for thought, not obligations: nothing here gates, scores or passes anything.
+```
+                    larder    ledger-web  nightly-sync  pantry
+recoverable-state   n/a       n/a         partly        n/a
+staying-current     missing   n/a         n/a           yes
+version-visibility  missing   yes         deferred      yes
+```
 
-CrossCut is mostly a skill for your existing coding agent (Claude Code, Codex, OpenCode). A small binary carries the skill and runs refreshes headless.
+How it's built:
+- **One directory per concern**, holding its user stories and a check. The check is the cheapest thing that answers it:
+  1. an off-the-shelf tool;
+  2. a custom script, tested against invented fixtures;
+  3. a prompt for your coding agent, when it takes judgment.
+- **Observations are kept apart from decisions.** "Deferred: being retired" is yours, and no run overwrites it.
+- **Git holds the history of the map.**
+
+Nothing here gates, scores or passes anything.
 
 ```bash
 cargo install --git https://github.com/maxeonyx/crosscut --locked
-crosscut install-skill           # once
-crosscut                         # what it is, and how an agent should start
+crosscut install-skill        # teach Claude Code, Codex and OpenCode how to use it
+crosscut check                # run the machine checks; --agentic adds the prompt checks
+crosscut map                  # the grid
+crosscut test                 # check the checks against their fixtures
 ```
 
 Then tell your agent: *"Use CrossCut here."*
