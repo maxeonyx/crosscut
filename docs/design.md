@@ -1,254 +1,346 @@
-# Why CrossCut has this shape
+# CrossCut design
 
-This is the design record: the search that produced the current shape, kept so
-that a future agent reconsidering CrossCut can see what was weighed. It is
-evidence, not authority. If the world it describes has changed, change the
-design and update this file.
+This file is the design record: what CrossCut is for, the situations it has
+to handle well, the candidate designs, and why the current one was chosen.
+Earlier rounds are in git history.
 
-The doctrine itself lives in [`skill/SKILL.md`](../skill/SKILL.md). Anything
-here that restates it must carry it forward whole, including the requirement
-to carry it forward again.
+It is evidence, not authority. When the world it describes changes, reopen
+the design and rewrite this file.
 
-## The problem in one paragraph
+## 1. What we are trying to make true
 
-A capable 2026 coding agent understands the request, reads the nearby code,
-makes a locally sensible change, validates it, and stops. The concerns an
-experienced engineer keeps in peripheral vision (recovery, deployability,
-version visibility, stale guidance, the same bug in five sibling repos) stay
-outside that loop unless someone lists them. CrossCut's job is to make the
-agent do that listing itself, concretely and specific to the project, and to
-keep the useful results visible over time, without turning any of it into
-obligation.
+> An engineer and their agents can take control of quality across many
+> projects and tools. For every aspect of quality that matters, they can see
+> where each project stands, track it over time, and improve it on purpose.
+> They can also decide, visibly, which aspects they will not manage.
 
-## Evidence the design started from
+Separating what we are sure of from what we are not:
 
-- **The predecessor.** `agent-tools` had `crates/standards`: 35 concerns as
-  Rust ratchet tests (about 7k lines), `NOT_APPLICABLE` lists, commit-keyed
-  review attestations in `state.json`, and ledger CI. It showed both halves of
-  the problem:
-  - Good: concerns as independent aspects, "red is information", evidence
-    shared between checks.
-  - Bad: every concern had to become a boolean test before it "counted"
-    ("the concern is not real until enforcement exists"). Applicability was
-    precomputed rather than reasoned about. Judgment-shaped concerns became
-    attestations keyed to a commit, which go stale silently. Much of the
-    recent work was machinery about the machinery (ledger holes, ratchet side
-    effects, bot commits). The suite could only see Rust CLI tools with a
-    Pages site.
-- **The harnesses.** Claude Code, Codex and OpenCode are all installed and
-  authenticated. All three load Agent Skills (`SKILL.md` directories):
-  Claude Code from `.claude/skills`, Codex from `.agents/skills`, and OpenCode
-  from both. On 2026-09-28, Codex 0.154 was observed listing a project-level
-  `.agents/skills/crosscut`. All three have a one-shot non-interactive mode
-  (`claude -p`, `codex exec`, `opencode run`). Real refreshes succeeded
-  through `claude` (about 10–60 s) and `codex` (about 20 s). This machine's
-  `opencode run` exits 0 with no output when its model is misconfigured, so
-  a missing view is reported together with the harness's stderr.
-- **Invocation libraries.** Every vendor SDK is a subprocess wrapper around
-  the same CLI. ACP is the only live cross-harness standard, and it is built
-  for editors (sessions, permission prompts, diffs), which is too much for a
-  one-shot assessment. coder/agentapi is deprecated. Decision: shell out and
-  keep the command table small and overridable.
-
-## Reservoir expansion done before choosing
-
-The brief's reservoirs were the starting point, not the list. What follows is
-the extension, drawn from the real ecosystem on this machine and from first
-principles. It stopped when new entries were mostly restating earlier ones.
-
-**Actors not in the brief:**
-- the scheduled headless agent with no human to ask;
-- a cheap model doing routine refreshes;
-- a delegated subagent that sees one slice;
-- a family member who depends on a home photo service but cannot operate it;
-- the person on call at 3am reading operational notes;
-- a future owner with no memory of any decision;
-- a contributor arriving from a GitHub search;
-- a package consumer pinned to an old version;
-- a regulator or auditor (work context, intuition pump only);
-- the CI system as an actor with its own failure modes;
-- the model provider, whose model deprecations change agent behavior;
-- the domain registrar and certificate authority, whose expiry dates are
-  silent deadlines.
-
-**Lifecycle moments not in the brief:**
-- first durable data;
-- first other user;
-- first incident;
-- machine replacement or OS reinstall;
-- a year without touching the project;
-- an upstream fork falling behind;
-- an upstream license change;
-- a CI platform deprecating a runtime;
-- a language edition change;
-- moving repos between personal and organization accounts;
-- a harness or model upgrade that changes how the same prompt behaves;
-- the event a time-bounded project existed for passing (a wedding site after
-  the wedding: the concern becomes archiving, not uptime);
-- a tool being archived;
-- deletion.
-
-**Project shapes seen here that the brief lists only generically:**
-- a dotfile/config sync tool, where the durable state is the user's machine;
-- a tmux bridge whose tests share a live tmux server with the host, which is
-  the source of a real CI-only flake;
-- a TDD ratchet: a meta-tool whose whole value is trust, so "does it actually
-  detect?" is the concern;
-- an umbrella control plane with submodules;
-- per-tool static sites on custom domains;
-- a skill, a prompt artifact that is itself the product;
-- a personally patched fork of a large upstream (OpenCode);
-- devenv/Nix environments;
-- a personal OS configuration;
-- small time and date utilities, where timezones and daylight saving are the
-  failure surface.
-
-**Concern types the brief does not name:**
-- trust in meta-tools;
-- test isolation from host state;
-- the cost of maintaining a fork;
-- DNS, domain and certificate expiry;
-- harness or model drift under stable prompts;
-- the cost of agent runs;
-- prompt injection from repository content into agents that can run commands
-  (this applies to CrossCut itself);
-- secrets leaking into agent transcripts;
-- skill and binary version skew;
-- Windows path and shell assumptions in a suite that ships Windows builds;
-- exit-code conventions across sibling tools;
-- supply-chain integrity of auto-update;
-- privacy of update checks;
-- time-boundedness;
-- **single-account blast radius.** Losing one GitHub account takes the
-  source, the releases, the sites and the auto-update channel of every tool
-  at once. This is an ecosystem-level concern that no per-repo checklist
-  would ever produce, and it is the kind of discovery CrossCut exists for.
-
-**Views not in the brief:**
-- "What breaks first if nobody touches this for a year?" (the decay view:
-  expiries, deprecations, tokens);
-- "What does a fresh machine need before any of this works?";
-- "What would a hostile repository make an agent running CrossCut do?";
-- "What is load-bearing that nobody would think to back up?"
-
-**What the expansion changed.** Concerns attach to at least these units: a
-repo, a deployment, a machine, an account, a relationship between repos, and
-the ecosystem as a whole. That argues against any schema keyed by repo, and
-for concern text that names its own scope in prose.
-
-## Candidate systems
-
-These are materially different control structures, not variants of one CLI:
-
-1. **Notebook.** Each concern is a plain Markdown file holding the question,
-   why it matters here, how to look, and the latest dated *Current view*. A
-   skill carries the doctrine and the modes of work. A small CLI delivers
-   prompts, lists concerns, and runs headless refreshes through an installed
-   harness.
-2. **Executable protocol.** Each concern is an executable that emits
-   structured observations. Agentic concerns are executables that call a
-   harness, and a runner aggregates the results. This is the standards crate,
-   generalized.
-3. **Generator that dissolves.** CrossCut is a one-shot consultant. It turns
-   findings into repo-native machinery (CI jobs, lint config, `AGENTS.md`
-   text) and keeps no state of its own.
-4. **Standing questions.** A section of `AGENTS.md` lists questions that
-   every agent session revisits opportunistically. There is no refresh and no
-   stored view.
-5. **Issue-tracker native.** Each concern is a labelled GitHub issue, and a
-   refresh is a comment containing the current view.
-6. **Observatory.** A central service with a database and dashboards.
-
-## Replaying episodes against the candidates
-
-| Episode | Notebook | Executable | Generator | Standing Qs | Issues |
-|---|---|---|---|---|---|
-| "Use CrossCut here" on a new service | skill drives discovery; writes 2–4 concern files | must write executables before anything is visible | good first pass, nothing persists | cheap, easily ignored | concerns read as a work queue |
-| Mature repo, no history | discovery plus a small chosen set | same, heavier | one-shot | no | issue noise |
-| Analyst's app, engineer arrives later | nothing required of the analyst; the concern dir can live outside their repo | needs a runner in place | ok once | needs repo edits | needs repo access and labels |
-| Wrapper over many home projects | inventory is prose plus paths; concerns name their scope | runner needs a repo model | no ecosystem view | per repo only | cross-repo is awkward |
-| Narrow bug reveals an invariant | generalize mode proposes a concern file | proposes an executable | proposes machinery | adds a line | opens an issue (framing risk) |
-| Concern answered by an existing tool | "How to look" names the command | wrapper around the tool | best: integrates the tool directly | n/a | n/a |
-| Judgment concern | the file *is* the persistent prompt | executable wraps a prompt | lost after the run | re-judged ad hoc | ok |
-| Concern becomes obsolete | `git rm` one file | delete code and registry entry | n/a | delete a line | close issue |
-| Agentic concern becomes deterministic | "How to look" changes, or the concern graduates into CI | natural | natural | n/a | n/a |
-| CI or scheduled run | `crosscut refresh` headless; commit the diff | natural | n/a | no | bot comments |
-| Offline or no harness | files are still readable; views keep their date | runner fails | n/a | fine | fails |
-| CrossCut vanishes | a folder of readable questions with dated answers | dead runner | fine | fine | fine, but locked to GitHub |
-| Pass/fail pressure | lowest: output is prose | highest: exit codes invite gating | medium | low | high: open/closed |
-
-The notebook wins or ties on nearly every row. It takes the best traits of
-the others:
-
-- from Standing Questions: an optional one-line pointer in a project's agent
-  guidance, so ordinary sessions notice the concerns;
-- from Generator: "graduated into repo-native tooling" is a first-class
-  mechanism outcome, not a failure;
-- from Executable: headless refresh for CI and scheduled use.
-
-The issue tracker was rejected on framing: issues are work items, and work
-items are obligations. The observatory was rejected on cost.
-
-## The integrating idea
-
-**A concern file is at once the definition, the refresh prompt, and the
-latest result.** Several requirements fall out of that one choice:
-
-- Persistence and history come from git: `git log -p` over one file shows
-  how the understanding evolved.
-- "What changed since last time" is `git diff`.
-- Deleting a concern is deleting a file.
-- A human, an interactive agent, and a headless agent all read the same
-  thing.
-- Nothing about it depends on CrossCut existing.
-- Adding a concern touches one file.
-- The mechanism can evolve (command, script, judgment, gone) without
-  changing the representation.
-
-Headless refresh never edits the question or context. The agent returns a
-new *Current view* and the CLI replaces only that section. Refreshing and
-reconsidering therefore stay separate acts, and a cheap model cannot corrupt
-the intent. The headless agent never *needs* to write. Whether it *can*
-depends on the harness: Codex's read-only sandbox enforces it. Claude runs
-with Bash, the edit tools denied, and the target's project settings not
-loaded. Concern files are therefore trusted like scripts.
-
-## Constraints extracted
-
-- **Known goals:** horizon expansion; visibility over time; freedom to
-  ignore; works for one project or many; the agent is the primary user;
-  small.
-- **Strong hypotheses:** most of the value is in prompts; git plus Markdown
-  is enough persistence; a harness is always available interactively and
-  often headless.
+- **Terminal outcomes:**
+  - Every aspect that matters is accounted for, across a varied ecosystem
+    (the diversity of aspects).
+  - For each aspect, where each project stands is visible, current, and
+    cheap to refresh.
+  - Improving one aspect across many projects is a tight loop, and the
+    result can be confirmed.
+  - Deciding not to manage something is recorded and respected. Leaving
+    essential complexity unmanaged is a legitimate choice, but it should be a
+    visible one.
+  - Agents are the main operators, so all of this has to work for them.
+- **Hard constraints:**
+  - It never gates. A red cell is information. It is not a failure of the
+    run, or of the person.
+  - Target projects do not have to know CrossCut exists.
+  - It has to work across different kinds of project: CLIs, sites,
+    services, libraries, deployments, scheduled jobs.
+- **Strong hypotheses:**
+  - A concern is a generally useful capability or property. The map of it
+    across projects is the product.
+  - Most cells can be answered by machines, and should be.
 - **Unknowns:**
-  - how well cheap models do headless refreshes;
-  - whether a synthesized cross-concern overview earns its cost;
-  - how concern material should be contributed back.
-- **Non-goals:** gating, scoring, compliance state, an agent runtime, a
-  plugin system, a project graph, a database.
-- **Decided, 2026-09-28:** `agent-tools` stopped ratcheting concerns. On
-  its `crosscut` branch (kept separate until CrossCut 1.0),
-  `crates/standards` was deleted and its 35 modules folded into eight
-  concern files. Max's reason: "testing tests, ratcheting ratchet,
-  machinery for the machinery". That is the predecessor's lesson in one
-  line, and the reason `concern-machinery-yield` now points at `crosscut/`
-  itself.
+  - How many cells can really be deterministic in a typical ecosystem.
+  - What agentic checks cost at ecosystem scale.
+  - How one ecosystem's concern material transfers to another.
+- **Historical accidents to avoid repeating:**
+  - Ratcheting results. That was agent-tools' predecessor.
+  - Making every mechanism agentic, and letting prompts drift into bug
+    hunting. Both happened in CrossCut round 1.
 
-## Why the CLI exists at all
+## 2. Evidence from two failed shapes
 
-The skill alone works interactively. The binary earns its place by:
+### agent-tools `crates/standards` (the predecessor)
 
-- **Delivery.** One `cargo install` or release download carries the skill,
-  and `crosscut install-skill` places it where all three harnesses look, so
-  the skill and the binary cannot drift apart.
-- **Orientation.** An agent that only has the binary on `PATH` gets the
-  doctrine and the next step from `crosscut` alone.
-- **Headless refresh.** Running each concern through a harness is fiddly
-  enough to be worth doing once, correctly: a pool of workers (six by
-  default), isolated failures, a timeout, containment flags, and writing
-  back only the view section.
-- **Listing.** `crosscut list` answers "what are we watching and how stale
-  is it?" without spending a model call.
+- **Kept the right thing:** a concern × project map, and deterministic,
+  fixture-tested checkers.
+- **What went wrong:**
+  - Results were ratcheted (pending → passing, never back), so a change
+    outside a project turned its map red.
+  - A concern was one test and one bit. The per-project detail lived only
+    in panic text, and nothing kept it.
+  - Judgment concerns became commit-keyed attestations, which went stale
+    with every commit.
+  - Applicability lived in code (`NOT_APPLICABLE` lists), so it was never
+    reasoned about.
+  - Adding a concern meant touching the module, the registry and the specs.
+  - The machinery about the machinery (ledger, attestations, gatekeepers)
+    became a quarter of all commits.
 
-Anything beyond this needs its own justification.
+### CrossCut round 1 (this repository's earlier commits)
+
+- **Kept the right thing:**
+  - A concern is one plain file that survives without the tool.
+  - The skill carries the doctrine.
+  - Headless refresh works through existing harnesses: a pool, timeouts,
+    containment.
+  - No gating anywhere.
+- **What went wrong:**
+  - **Every mechanism became agentic.** Even `gh release view` ran only as
+    prose an agent was told to follow, so nothing could run without a model,
+    cheaply, in CI.
+  - **Discovery drifted into bug hunting.** The prompts rewarded
+    "surprising findings", and agents answered with defects.
+  - **A refresh regenerated the whole view.** A human decision, such as
+    "Windows support for oc: deliberately not", survived only if the next
+    agent chose to copy it forward.
+  - **Views were prose containing a table**, so machines had to parse
+    Markdown written by a model.
+  - **There was no answer to "how is this mechanism tested?"**, for custom
+    checks or for prompts.
+  - **The tool was built and tested against real repositories.** Applying
+    CrossCut got mixed up with building it, and the real repositories'
+    peculiarities leaked into the design. From now on, tests, evaluations and
+    demos use invented ecosystems (section 7).
+
+## 3. An invented ecosystem to think with
+
+This is **Juniper**, a small team's projects. Nothing in the design is
+allowed to depend on details of Max's real repositories.
+
+| project | kind | notes |
+|---|---|---|
+| `pantry` | Rust CLI | Released to GitHub. Self-updates. |
+| `larder` | Rust CLI | Sibling of pantry, written later. No self-update. |
+| `ledger-api` | Python service with Postgres | Deployed by hand. Holds customer data. |
+| `ledger-web` | Static site | Deployed by CI to Pages. |
+| `nightly-sync` | Scheduled job | Cron on one VM. |
+| `common-auth` | Library | Consumed by ledger-api, and by the CLIs, by git tag. |
+| `photo-vault` | Upstream open-source deployment | Only config and data are owned. |
+
+## 4. Episodes the design has to survive
+
+Each episode is written from the operator's side, which usually means an
+agent's.
+
+1. **First map.** "Use CrossCut on Juniper." The agent should end up with a
+   concern set drawn from the catalogue and from asymmetries such as
+   "pantry self-updates, larder doesn't". It should have a mechanism per
+   concern, cheapest first, and a filled grid. It should not produce a list
+   of bugs.
+2. **New project.** `larder` is added. Its column should fill in without
+   anyone editing each concern. The interesting view is "where larder lags
+   its sibling".
+3. **New concern.** "I want every tool to stay current." A deterministic
+   check for the CLIs, deciding n/a for the site, and judgment for
+   photo-vault's upstream images.
+4. **Raise the suite.** An agent is asked to give every CLI self-update. It
+   reads the concern, fixes larder, and reruns the check in seconds. The
+   cell turns yes. No model is needed to confirm it.
+5. **A deliberate "no".** Max decides that nightly-sync will never have
+   version visibility, because it is being retired. That decision has to
+   survive every future refresh. It should show as `deferred` with its
+   reason, and should re-surface if the observation changes, for example if
+   nightly-sync gains a version file anyway.
+6. **Drift.** ledger-web's deploy stops publishing its version file. A
+   scheduled check notices. The map shows the change in its history, and
+   nothing fails.
+7. **The judgment tier has to be tested too.** An agentic check for "agent
+   guidance is true" gets rewritten. Did the rewrite make it better or
+   worse? It should be run against invented projects with known answers.
+8. **A custom check becomes noise.** A layout change makes a script report
+   `missing` everywhere. Its fixtures should catch this. The concern stays;
+   the check is fixed or replaced, or the concern moves up to judgment.
+9. **Offline, or no credentials.** `gh` is logged out. The cells that need
+   it become `unknown: gh not authenticated`, and everything else still
+   runs.
+10. **Cost.** 20 concerns × 7 projects is 140 cells. If deterministic cells
+    take milliseconds, and only the judgment cells cost model calls, a
+    refresh is cheap enough to run daily.
+11. **An agent working inside one project** asks: which concerns apply to
+    `ledger-api`, and where does it stand? That is one column of the map.
+12. **The complexity tax.** A concern of a different kind: it asks whether
+    each part has a discoverable reason to exist. Its cells are judgment, and
+    its evidence is a list of candidates for deletion.
+13. **Relational concerns.** "Consistent conventions across the CLIs"
+    compares projects with each other. The check needs to see its siblings,
+    not just its own project.
+14. **CrossCut disappears.** What is left should still make sense: a folder
+    of concern definitions, decisions, check scripts and dated observations.
+
+## 5. Candidate models
+
+- **A. Round 1.** One Markdown file per concern. A refresh has an agent
+  rewrite the file's "Current view" section, which is prose containing a
+  table.
+- **B. Observations, decisions and mechanisms, with a computed map.**
+  - Each concern is a directory: a definition, which includes the human's
+    decisions, plus a mechanism, test fixtures, and machine-written
+    observations.
+  - The map is observations joined with decisions.
+- **C. A code-first suite.** Checkers in one compiled crate, as in the
+  predecessor, but reporting rows instead of pass or fail.
+- **D. One record per cell.** A file, or a database row, per (concern,
+  project), each with its own status and history.
+
+| Episode | A | B | C | D |
+|---|---|---|---|---|
+| 1 first map | ok | ok | heavy: code per concern | ok |
+| 2 new project | an agent rewrites every view | a new column, cells computed | ok | 20 new files |
+| 4 raise and confirm | a model call to confirm | the check reruns in ms | ok | ok |
+| 5 deliberate "no" survives | fragile: the agent must copy it forward | structural: the decision lives apart from observations | needs a decisions file anyway | ok |
+| 6 drift, cheap schedule | model per run | cheap | cheap | cheap |
+| 7, 8 mechanisms tested | nothing | fixtures, for every tier | fixtures, for code only | nothing |
+| 9 partial failure | per concern | per cell | per test | per cell |
+| 13 relational | prose | the check sees its siblings | ok | awkward |
+| 14 without CrossCut | readable | readable | a dead crate | readable, but a sprawl |
+| Adding a concern costs | 1 file | 1 directory: definition plus check | module plus registry | many files |
+| Agents parse model prose | yes | no: observations are written by the tool | no | no |
+
+B wins or ties almost everywhere. It keeps A's best trait, plain files that
+survive without the tool, and C's best trait, deterministic and tested
+checks. It avoids D's sprawl, because observations for a concern live in one
+file.
+
+## 6. The chosen model
+
+### The integrating idea
+
+**Separate what is observed from what is decided, and compute the map from
+both.**
+
+- **Observations** are regenerable at any time, by any mechanism. They are
+  owned by the tool, and never edited by hand.
+- **Decisions** are the human's, such as "n/a: archived" or "deferred:
+  being retired". They live with the concern's definition, and no refresh
+  touches them.
+- **The map** is the observation, annotated by the decision if there is one.
+  When the two disagree, for example a decision says deferred but the
+  project now observes yes, the map says so.
+
+Several requirements fall out of this one split:
+- Deliberate non-management is durable (episode 5).
+- A refresh is idempotent and safe to run headless.
+- Checks only have to report facts.
+- History is just `git log` over the observations file.
+- "What changed?" is `git diff`.
+
+### Layout
+
+```
+crosscut/
+  projects.toml            which projects the map covers
+  concerns/
+    <slug>/
+      concern.md           name, user stories, what it looks like per kind
+                           of project, and ## Decisions. Human- and agent-owned.
+      check                the mechanism: an executable (tiers 1-2)
+        or check.md        a prompt (tier 3)
+      fixtures/<case>/     invented projects, each with an `expect` file
+      observed.tsv         written by `crosscut check`. Never edit by hand.
+```
+
+`projects.toml` lists project names and paths, with globs allowed, such as
+`tools/*`. The projects are directories, and checks discover facts from the
+projects themselves: a site URL from `docs/CNAME`, a version from the
+manifest, and so on. That means no second inventory to keep in sync.
+
+### The mechanism interface: one cell at a time
+
+Every mechanism answers one question: **for this project, what is its status
+on this concern, and what is the evidence?**
+
+```
+check <project-dir>          environment: CROSSCUT_PROJECT, CROSSCUT_PROJECTS (siblings)
+→ stdout: <status>: <evidence>     status ∈ yes, partly, missing, n/a, unknown
+```
+
+The interface is the same for every tier:
+
+1. **Tier 1, an off-the-shelf check.** The `check` script is glue around a
+   mature tool (`gh`, `curl`, `cargo audit`, a linter), a few lines long.
+   The tool does the judging.
+2. **Tier 2, a custom check.** Real logic of our own. The bar is high:
+   - It must come with fixtures covering true positives and true negatives.
+   - It is itself on the map for concerns such as tests that catch
+     breakage, and the complexity tax.
+   - When it turns noisy, it gets replaced.
+3. **Tier 3, an agentic check.** `check.md` is a prompt. CrossCut runs it
+   through the installed harness for one project and parses one status
+   line. It is easy to write, and just as much in need of fixtures. Running
+   those fixtures costs model calls, so they run on demand.
+
+Before tier 1 there is always a tier 0, which is a question rather than a
+mechanism: could the concern disappear, or could the good property become
+structural?
+
+`deferred` is never observed. It exists only as a decision, which is what
+keeps "not managed" a human act.
+
+### Commands
+
+| Command | What it does | Model? |
+|---|---|---|
+| `crosscut check [slug...]` | Runs mechanisms per cell, in a pool, and writes `observed.tsv`. | Only for tier 3 |
+| `crosscut map [--project p]` | The grid of observations and decisions. One project gives one column (episode 11). | no |
+| `crosscut test [slug...] [--agentic]` | Runs each mechanism against its fixtures, and compares with `expect`. | only with `--agentic` |
+| `crosscut prompt <mode>` | The skill's modes, for any harness. | – |
+| `crosscut install-skill` | Installs the skill. | – |
+
+`check` exits 0 when every cell ran, whatever the statuses. A cell that could
+not run becomes `unknown: <why>`. A failed mechanism does not fail the
+command.
+
+### What the skill is for, in this model
+
+The skill is where agents learn to do what the tool cannot:
+- choose concerns: from the catalogue, from asymmetries between siblings,
+  and from the reservoirs;
+- write definitions and user stories;
+- pick the lowest tier that works, and write that check;
+- write fixtures;
+- propose decisions to the human;
+- read the map to decide where the leverage is.
+
+The doctrine, including its requirement to carry itself forward, stays at
+the top of SKILL.md.
+
+## 7. How CrossCut itself is tested
+
+- **The tool:** black-box tests against invented fixture ecosystems in
+  `tests/fixtures/`. There is no real repository anywhere in the suite.
+- **Mechanisms:** `crosscut test` runs fixtures. That is the same machinery
+  users rely on for their own concerns, so CrossCut's tests exercise it.
+- **The prompts:**
+  - An evaluation ecosystem, Juniper from section 3, is built as fixture
+    directories with known answers.
+  - Running `setup` over it headless should produce capability concerns such
+    as staying-current, with larder missing where pantry has it. It should
+    not produce a bug list.
+  - This is scored by hand, or by a second agent, and run on demand, because
+    it costs model calls.
+- **The site demo** is Juniper's real `crosscut map` output, so the demo is
+  true.
+
+## 8. Harness facts still in force
+
+These were verified in round 1:
+- `claude -p`, `codex exec` and `opencode run` all work headless.
+- All three load Agent Skills.
+- Only Codex's read-only sandbox actually prevents writes. A Claude refresh
+  once left an untracked file in a repository despite being told not to.
+- A misconfigured `opencode run` exits 0 with no output.
+
+The pool, timeouts, containment flags and stderr reporting carry over as
+they are.
+
+## 9. Decisions still open
+
+These are for Max:
+
+1. **Tier-3 granularity.** One agent per cell is isolated, parallel, and
+   fine with a cheap model, but costs about projects × judgment concerns
+   calls. One agent per concern covering every project is cheaper, but
+   coarser, and fails as a unit. The current lean is per cell, with an
+   explicit `--model`.
+2. **`observed.tsv` in git, or not.** Committing it gives history and diffs
+   for free, but makes scheduled runs produce commits. Not committing it
+   loses the history of the map.
+3. **What a scheduled run does.** Committing the observations on a timer is
+   "tracking over time" at nearly no cost. The alternative is to run checks
+   only on demand.
+4. **Finding the wrapper from inside a project.** In episode 11 the agent is
+   working in `ledger-api`'s own repository, which does not know CrossCut
+   exists. How does it find Juniper's `crosscut/`? Candidates:
+   - a user-level config listing wrappers (`~/.config/crosscut`);
+   - an environment variable;
+   - a one-line pointer in the project's agent guidance, which breaks
+     "projects need not know".
