@@ -127,6 +127,14 @@ things to say:
 - **Noticed along the way:** dimensions this refresh touched that no concern
   represents yet. Leave this out when there are none. Do not invent them.
 
+A view should be readable in a minute or two:
+- Lead with a one-line headline.
+- Keep the evidence that supports the conclusions, and leave the working
+  out.
+- A few hundred words is typical. If a view keeps growing past that, the
+  concern is probably several concerns. Or the investigation belongs in a
+  report or commit message, and the view needs only its conclusions.
+
 Never use pass/fail, scores or grades. If someone later wants a gate on one
 concern, that is their choice, built on top of CrossCut. It is not
 CrossCut's worldview.

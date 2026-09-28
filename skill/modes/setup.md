@@ -19,6 +19,15 @@ Read before you theorize:
 Then run things: the setup command, the tests, `--help`. What happens when
 you run it tells you more than reading about it.
 
+Running has side effects:
+- Test suites rewrite lockfiles and status files.
+- They leave sessions, containers and daemons behind.
+- They share state with the host: a tmux server, a local database, caches.
+
+Prefer commands that only look. Before running anything heavier, note
+`git status` in every repository it can touch, and afterwards put back
+anything you changed. Whatever it disturbed is worth reporting too.
+
 Work out what the unit is:
 - one repository;
 - several;
@@ -32,6 +41,13 @@ stop the work.
 
 If `crosscut/` already exists, read it first, and treat the existing
 concerns as evidence rather than authority.
+
+The place may already have its own concern system: a standards suite, a
+review checklist, a dashboard, a set of CI gates. Treat that as evidence too:
+- Its good mechanisms can become rungs in "How to look".
+- What it cannot see tells you where to look.
+- The system itself can be the subject of a concern: what does it cost, and
+  what does it show?
 
 ## 2. Expand before narrowing
 
@@ -108,3 +124,8 @@ End with:
 - what you could not see, and why.
 
 That last list is often the most valuable part.
+
+Some findings are one small, obvious fix with a lot of leverage, such as a
+command in the guidance that does damage. Just report those clearly, or fix
+them if that is in scope. A concern is for a question worth asking again,
+not for a single defect.
