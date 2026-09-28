@@ -154,6 +154,41 @@ Applicability and importance are contextual. A common concern is not a
 universal one. Unknown is not bad. Not applicable is not good. Deliberately
 accepted is not forgotten.
 
+### What is worth raising: a story, a generic concern, a concrete instance
+
+Raise a concern when it has all three:
+1. **A concrete story it affects:** your best guess at a real use case the
+   current system does not cover. The person can be a user, but it will often
+   be a developer, because the person reading is most likely a developer. It
+   can be ops, security, or anyone else. The story motivates.
+2. **A generic concern:** the question in a form that is useful beyond this one
+   case. It is what sells the value of keeping the question visible.
+3. **A concrete instance discovered here:** a reason to act now.
+
+Not "should `berth-desk` tell an open tab that it is stale?", which reads as a
+bug. Instead:
+- the story: a marina office leaves the tab open for weeks, and after a deploy
+  its old code writes bookings the new API misreads;
+- the generic concern: can a long-running client tell that it is out of date?
+- the instance: `berth-desk` cannot, and neither can the kiosk app.
+
+A concern should generalise. It is most valuable when it matters for several
+projects now, and still valuable when it will obviously matter for the next
+project. The best discoveries span projects: two apps computing tide windows
+with diverging versions of one library is something no single-repository
+review finds. Something valuable for only one project is worth mentioning,
+and CrossCut should mention it, but it is not a concern in this sense.
+
+**Rank by leverage, not by importance alone.** The highest-value item is not
+the most important one if it is expensive to act on. CrossCut's sweet spot is
+the fifty tiny, easy things for an agent to build that, taken together,
+massively raise quality: just having visibility of them improves the
+stack with almost no effort. Knowing which version is deployed is the
+archetype: cheap to implement, and as valuable to a developer as another
+feature. A tested database restore is important too, but it is operationally
+hard, so it should not be what leads. Do not fetishise the important. Surface
+it, say what it would cost, and lead with leverage.
+
 ### Discovering concerns: go on and on
 
 Discovery is ephemeral. It can, and should, be regenerated at any time by
@@ -206,12 +241,28 @@ demand further project-specific expansion. Push across:
 The purpose of these lists is not a taxonomy. It is to force concrete
 thought. Go beyond them.
 
+Expand ideas widely, not access. Work with whatever access you are given, and
+do not reach for more: the whole company's systems are not needed. If you have
+too little to start, say what would be enough, for example "put the code
+projects you want me to look at in one directory". Ask for more only where a
+specific question needs it, and say which question.
+
+Present the landscape as something designed for its reader, not as a
+Markdown file: usually an HTML page, built from first principles to give that
+person exactly what they need, leading with what has the most leverage for
+them.
+
 In an ecosystem, the relationships are concerns too: a capability one project
 has and its siblings lack; the same problem solved five ways; something every
 project needs and none has; several projects that should share code; and two
 that should **not** share an abstraction.
 
 ### Making concerns persistent: a high bar
+
+Nothing persists, not even the skill, until the human is sold on the value.
+The first experience is discovery: it ends when they decide whether CrossCut
+will be valuable for them. Help them find out that it is *not* valuable as
+early as possible, although we hope it will be.
 
 Persisting a concern is a high bar, and a landscape of a hundred concerns is
 not a first experience. The value arrives when essential complexity is
