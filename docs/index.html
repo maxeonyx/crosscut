@@ -57,6 +57,9 @@
     .notes.grow { animation: appear .7s ease both; }
     .notes { list-style: none; margin-top: 1rem; font-size: 0.9rem; transition: opacity .8s ease .9s; }
     .notes li { margin: 0.3rem 0; padding-left: 1.2rem; position: relative; }
+    .notes .proj { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.9em; color: var(--muted); }
+    .notes .chip { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.85em; background: var(--bg-elev); border: 1px solid var(--border);
+                   border-radius: 5px; padding: 0.05rem 0.4rem; margin-right: 0.2rem; }
     .notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
     .controls { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1rem; margin-top: 0.8rem; }
     button { font: inherit; font-size: 1.15rem; font-weight: 700; color: var(--bg); background: var(--accent); border: 0; border-radius: 999px;
@@ -106,10 +109,10 @@
       </table>
       </div>
       <ul class="notes">
-        <li><strong>data-cli</strong>: ops-cli's sibling. Got neither.</li>
-        <li><strong>photo-server</strong>: every team photo, one disk.</li>
-        <li><strong>billing-api</strong>: one copy of the invoices, overwritten nightly.</li>
-        <li><strong>deferred</strong>: someone decided. It stays decided.</li>
+        <li><span class="proj">data-cli</span>: ops-cli's sibling. Got neither.</li>
+        <li><span class="proj">photo-server</span>: every team photo, one disk.</li>
+        <li><span class="proj">billing-api</span>: one copy of the invoices, overwritten nightly.</li>
+        <li><span class="chip deferred">deferred</span> someone decided. It stays decided.</li>
       </ul>
     </div>
     <div class="controls">
