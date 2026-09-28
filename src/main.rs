@@ -445,7 +445,11 @@ impl Harness {
                 ])
                 .args(["--permission-mode", "dontAsk"])
                 .args(["--allowedTools", "Read,Grep,Glob,Bash,WebFetch,WebSearch"])
-                .args(["--disallowedTools", "Edit,Write,NotebookEdit"]);
+                .args([
+                    "--disallowedTools",
+                    "Edit,Write,NotebookEdit,Agent,Workflow",
+                ])
+                .arg("--strict-mcp-config");
                 (cmd, true)
             }
             Harness::Codex => {

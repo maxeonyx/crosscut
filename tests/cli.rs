@@ -360,7 +360,9 @@ fn model_is_passed_to_known_harnesses_and_refused_for_custom_commands() {
         "target project settings would load: {out}"
     );
     assert!(
-        out.contains("--disallowedTools Edit,Write,NotebookEdit"),
+        out.contains(
+            "--disallowedTools Edit,Write,NotebookEdit,Agent,Workflow --strict-mcp-config"
+        ),
         "{out}"
     );
     let out = stdout(
