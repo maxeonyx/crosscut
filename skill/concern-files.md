@@ -128,7 +128,9 @@ things to say:
   represents yet. Leave this out when there are none. Do not invent them.
 
 A view should be readable in a minute or two:
-- Lead with a one-line headline.
+- Lead with a one-line headline that says what is most worth knowing now.
+  "Applies strongly" on its own tells the reader nothing, and `crosscut list`
+  shows only this first sentence.
 - Keep the evidence that supports the conclusions, and leave the working
   out.
 - A few hundred words is typical. If a view keeps growing past that, the
