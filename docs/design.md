@@ -130,9 +130,10 @@ agent's.
    survive every future refresh. It should show as `deferred` with its
    reason, and should re-surface if the observation changes, for example if
    nightly-sync gains a version file anyway.
-6. **Drift.** ledger-web's deploy stops publishing its version file. A
-   scheduled check notices. The map shows the change in its history, and
-   nothing fails.
+6. **Drift.** ledger-web's deploy stops publishing its version file. The
+   next time anyone runs `crosscut check`, the cell changes, and the diff of
+   the observations shows it. Nothing fails. Scheduled runs are out of scope
+   (Max, 2026-09-28): checks run when a person or an agent runs them.
 7. **The judgment tier has to be tested too.** An agentic check for "agent
    guidance is true" gets rewritten. Did the rewrite make it better or
    worse? It should be run against invented projects with known answers.
@@ -145,8 +146,12 @@ agent's.
 10. **Cost.** 20 concerns × 7 projects is 140 cells. If deterministic cells
     take milliseconds, and only the judgment cells cost model calls, a
     refresh is cheap enough to run daily.
-11. **An agent working inside one project** asks: which concerns apply to
+11. **An agent working on one project** asks: which concerns apply to
     `ledger-api`, and where does it stand? That is one column of the map.
+    In the wrapper pattern, work happens from the wrapper checkout (as with
+    `tools/<name>` in agent-tools), so searching upwards finds `crosscut/`.
+    A project with no wrapper keeps its own `crosscut/`. Only in the wrapper
+    pattern do projects not need to know about CrossCut.
 12. **The complexity tax.** A concern of a different kind: it asks whether
     each part has a discoverable reason to exist. Its cells are judgment, and
     its evidence is a list of candidates for deletion.
@@ -177,7 +182,7 @@ agent's.
 | 2 new project | an agent rewrites every view | a new column, cells computed | ok | 20 new files |
 | 4 raise and confirm | a model call to confirm | the check reruns in ms | ok | ok |
 | 5 deliberate "no" survives | fragile: the agent must copy it forward | structural: the decision lives apart from observations | needs a decisions file anyway | ok |
-| 6 drift, cheap schedule | model per run | cheap | cheap | cheap |
+| 6 drift, cheap rerun | model per run | cheap | cheap | cheap |
 | 7, 8 mechanisms tested | nothing | fixtures, for every tier | fixtures, for code only | nothing |
 | 9 partial failure | per concern | per cell | per test | per cell |
 | 13 relational | prose | the check sees its siblings | ok | awkward |
@@ -217,7 +222,7 @@ Several requirements fall out of this one split:
 
 ```
 crosscut/
-  projects.toml            which projects the map covers
+  projects                 which projects the map covers: paths or globs, one per line
   concerns/
     <slug>/
       concern.md           name, user stories, what it looks like per kind
@@ -225,13 +230,15 @@ crosscut/
       check                the mechanism: an executable (tiers 1-2)
         or check.md        a prompt (tier 3)
       fixtures/<case>/     invented projects, each with an `expect` file
-      observed.tsv         written by `crosscut check`. Never edit by hand.
+      observed.tsv         written by `crosscut check`, and committed (section 9). Never edit by hand.
 ```
 
-`projects.toml` lists project names and paths, with globs allowed, such as
-`tools/*`. The projects are directories, and checks discover facts from the
-projects themselves: a site URL from `docs/CNAME`, a version from the
-manifest, and so on. That means no second inventory to keep in sync.
+`crosscut/projects` is a plain list with one path or glob per line (for
+example `tools/*`), relative to the directory that holds `crosscut/`. Each
+project's name is its directory name. There is nothing else to keep in sync,
+because checks discover facts from the projects themselves: a site URL from
+`docs/CNAME`, a version from the manifest, and so on. A richer format waits
+until a flow needs it.
 
 ### The mechanism interface: one cell at a time
 
@@ -322,25 +329,85 @@ These were verified in round 1:
 The pool, timeouts, containment flags and stderr reporting carry over as
 they are.
 
-## 9. Decisions still open
+## 9. Committing observations, worked through as flows
 
-These are for Max:
+Max's hypothesis is that results should be committed. Here it is tested
+against concrete flows in small steps. `obs` means the concern's
+observations file.
 
-1. **Tier-3 granularity.** One agent per cell is isolated, parallel, and
-   fine with a cheap model, but costs about projects × judgment concerns
-   calls. One agent per concern covering every project is cheaper, but
-   coarser, and fails as a unit. The current lean is per cell, with an
-   explicit `--model`.
-2. **`observed.tsv` in git, or not.** Committing it gives history and diffs
-   for free, but makes scheduled runs produce commits. Not committing it
-   loses the history of the map.
-3. **What a scheduled run does.** Committing the observations on a timer is
-   "tracking over time" at nearly no cost. The alternative is to run checks
-   only on demand.
-4. **Finding the wrapper from inside a project.** In episode 11 the agent is
-   working in `ledger-api`'s own repository, which does not know CrossCut
-   exists. How does it find Juniper's `crosscut/`? Candidates:
-   - a user-level config listing wrappers (`~/.config/crosscut`);
-   - an environment variable;
-   - a one-line pointer in the project's agent guidance, which breaks
-     "projects need not know".
+**Flow A: raise one project, then confirm.**
+1. Max, in the Juniper wrapper: "give larder self-update, like pantry".
+2. The agent runs `crosscut map --project larder`. The map shows
+   staying-current `missing`.
+3. It reads `concerns/staying-current/concern.md` and `check`.
+4. It implements self-update in `larder`, and commits there.
+5. It runs `crosscut check staying-current --project larder`, which takes
+   milliseconds, because the check is tier 1. The larder row becomes `yes`.
+6. It commits in the wrapper: the larder pointer bump, and the `obs` change,
+   together.
+
+→ If `obs` is committed, the wrapper commit records *what the change did to
+the map*, next to the code that did it. A reviewer sees
+`larder missing → yes` in the diff. If it is not committed, that record
+exists nowhere.
+
+**Flow B: the next day, a fresh agent.**
+1. "Where are we on staying-current?"
+2. `crosscut map` reads the committed `obs` immediately, and shows each
+   row's `since` date.
+3. For a stale-looking tier 1 or 2 row, rerunning costs milliseconds. For
+   tier 3 it costs model calls, so the committed row saves them.
+
+→ Committed observations are a cache of expensive judgment, and a record of
+cheap facts.
+
+**Flow C: two agents in parallel clones.**
+1. Agent 1 checks staying-current and agent 2 checks version-visibility.
+   They write different files, so there is no conflict.
+2. Agent 1 checks staying-current for larder, and agent 2 for pantry. That
+   is the same file but different lines, so git merges them, provided the
+   rows are in a stable sorted order.
+
+→ One `obs` file per concern, one row per project, sorted by project. A
+single global results file would conflict constantly.
+
+**Flow D: rerun with nothing changed.**
+1. Someone runs `crosscut check` twice in a row.
+2. The first run changes whatever changed. The second should produce **no
+   diff**, or history fills with noise.
+3. Deterministic evidence is stable, so this works for tiers 1 and 2.
+   Tier-3 evidence is reworded on every run.
+
+→ Rows carry a `since` date, which moves only when the status changes, and
+no "last checked" timestamp, because that would change on every run. For
+tier 3, if the status is unchanged, the old row is kept whole. Git history
+then becomes the history of *changes to the map*, which is what "tracking
+over time" means.
+
+The cost: the file does not say when a row was last *confirmed*. For tiers 1
+and 2, rerunning is the answer. For tier 3, `since` is a lower bound. This
+compromise is accepted, and the thing that would reopen it is someone needing
+"last verified" for judgment cells.
+
+**Flow E: "what changed this month?"**
+1. `git log -p --since=1.month -- crosscut/concerns/*/observed.tsv`.
+2. Every hunk is a status change, or a factual evidence change, dated by its
+   commit.
+
+→ This only works if the file is committed, and only reads well because of
+flow D.
+
+**Flow F: a project is removed from the inventory.**
+1. `nightly-sync` is retired, and removed from `crosscut/projects`.
+2. The next check drops its rows. Git keeps them.
+
+**Conclusion.** Commit `obs`: one file per concern, sorted rows of
+`project, status, since, evidence`, rewritten only when something actually
+changed. `crosscut check` never commits. The agent commits the observations
+with the work that caused them.
+
+## 10. Resolved
+
+- Tier-3 granularity is **per cell** (Max, 2026-09-28).
+- There are no scheduled runs. They are out of scope (Max, 2026-09-28).
+- The wrapper-discovery question dissolves; see episode 11.
