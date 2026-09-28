@@ -33,7 +33,7 @@
 
     /* The map: projects down, shared requirements across, and more requirements trailing off. */
     #map { margin-top: 3.5rem; }
-    .lead { font-size: 1.4rem; line-height: 1.35; font-weight: 500; letter-spacing: -0.01em; max-width: 32rem; margin: 1rem auto 0; }
+    .lead { font-size: 1.4rem; line-height: 1.35; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 1.75rem; }
     .scroll { overflow: hidden; margin: 0 -1.25rem; padding: 6px 1.25rem; }
     table.map { border-collapse: separate; border-spacing: 6px; margin: -6px; }
     .map thead th { font-weight: 500; font-size: 0.8rem; line-height: 1.25; color: var(--muted); text-align: left; vertical-align: bottom; width: 7rem; min-width: 7rem; padding: 0 0.15rem 0.2rem; }
@@ -59,7 +59,7 @@
     .map.pointing td.lit { opacity: 1; border-color: var(--accent); }
 
     /* Before the click: the map is one cell, the thing the agent was asked for. */
-    .seeded .legend, .seeded .rest { display: none; }
+    .seeded .lead, .seeded .legend, .seeded .rest { display: none; }
     .seeded table.map { margin: -6px auto; }
     .seeded .map tbody tr:not(.seed-row), .seeded .map th:not(.seed-label):not(.corner), .seeded .map td:not(.seed) { display: none; }
     .go { display: block; margin: 2.5rem auto 0; font: inherit; font-size: 1.1rem; font-weight: 700; color: var(--bg); background: var(--accent);
@@ -100,10 +100,10 @@
 <main>
   <header>
     <h1>Cross<span>Cut</span></h1>
-    <p class="lead">Every project needs to track many shared requirements. CrossCut gets your agent to advocate for them.</p>
   </header>
 
   <section id="map" aria-label="An example map">
+    <p class="lead">Every project needs to track many shared requirements. CrossCut gets your agent to advocate for them.</p>
     <div class="scroll">
       <table class="map">
         <thead>
@@ -206,7 +206,7 @@ crosscut install-skill   <span class="dim"># for Claude Code, Codex and OpenCode
       cell.classList.add("grow");
     }));
     // The page's structure arrives at once; only the grid takes its time.
-    for (const el of document.querySelectorAll(".legend, .rest")) el.classList.add("fade");
+    for (const el of document.querySelectorAll(".lead, .legend, .rest")) el.classList.add("fade");
   });
 
   // Every gap has a question behind it: hover or tap a dashed cell to see it.
