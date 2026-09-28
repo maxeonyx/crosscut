@@ -452,3 +452,15 @@ fn readme_and_site_carry_the_requirement_to_carry_the_doctrine() {
         "site"
     );
 }
+
+#[test]
+fn list_headlines_drop_markdown_emphasis() {
+    let eco = ecosystem();
+    let text = RECOVERY.replace(
+        "Unknown: backups were never checked.",
+        "**Headline:** backups exist. Nobody has restored one.",
+    );
+    fs::write(eco.path().join("crosscut/concerns/recovery.md"), text).unwrap();
+    let out = stdout(crosscut().arg("list").current_dir(eco.path()));
+    assert!(out.contains("2026-01-01: backups exist.\n"), "{out}");
+}

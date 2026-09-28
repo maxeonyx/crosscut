@@ -342,6 +342,8 @@ impl Concern {
             .map(str::trim)
             .find(|line| !line.is_empty())
             .unwrap_or("");
+        let first = first.replace("**", "");
+        let first = first.strip_prefix("Headline:").unwrap_or(&first).trim();
         let headline = first
             .find(". ")
             .map_or(first, |end| &first[..=end])
