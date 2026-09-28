@@ -53,37 +53,28 @@ obligation.
 
 ## Current view — 2026-09-28
 
-A new carrier, the site (`docs/index.html`), is the most complete paraphrase so far, and a test pins its carry-forward sentence. With the prompts still structural and CI now running the tests, the risk has moved to the two-tier wording question and the inventory's blind spot. Neither has changed. Observed with high confidence from `cargo test` (19 passed), a dry run, the diff `b200de9..HEAD` and reading.
+Nothing has drifted since the last view. The only changes are a `list` headline fix (`3fded27`) and an uncommitted brevity nudge in `refresh_prompt()`, so the open items are the same three: the two tiers of wording, the grep's blind spot, and the unguarded doctrine cut. Observed with high confidence from `cargo test` (20 passed), a dry run, the diff `52869d2..HEAD` plus the working tree, and the inventory grep.
 
-- **Prompts are handled structurally, confirmed.**
-  - `prompt()` (`src/main.rs:224`) still starts from `skill_body()`.
-  - `refresh_prompt()` (`:527`) still wraps `prompt("refresh")`.
-  - The dry run opens with `# CrossCut` / `## Doctrine (carry this forward)`.
-  - `orientation()` (`:204`) still embeds only the section cut by `doctrine()` (`:196-202`). That is fine but easy to regress: an `## ` heading added inside the doctrine would silently cut it short.
-- **New since last view, and stronger:**
-  - `.github/workflows/ci.yml` runs `cargo test` on every push and PR, so the three carrier tests now run on every change, not only when someone thinks to run them.
-  - A new test, `readme_and_site_carry_the_requirement_to_carry_the_doctrine`, checks the README and the site. `AGENTS.md:23` lists the site as a carrier.
-- **The site (`docs/index.html`).**
-  - It keeps freedom to ignore, "Unknown is not bad. Not applicable is not good.", "a refresh that finds bad news has succeeded", and the full five-step ladder.
-  - It shows a crossed-out scorecard. That is anti-gate framing, not drift.
-  - Its "contagious paragraph" (`:210`) passes on the requirement and links to SKILL.md.
-  - It drops "minimise total complexity" and "applies itself to itself", which is reasonable for a landing page.
-- **Inventory.** No carrier has been lost. New since last view: `docs/index.html:210` and `AGENTS.md:23`. Line numbers have moved: `concern-files.md:155,194`, `crosscut/README.md:38`.
-- **The inventory still has a blind spot.** The grep in "How to look" doesn't cover `docs/index.html` or `crosscut/README.md`. It matches the site only because "pass on" happens to appear. It still misses `skill/modes/reconsider.md:38-39`, which says "passes on" / "carried", and a wider pattern (`carr\|pass.* on`) would catch that. "How to look" is stale here.
-- **Two tiers of carrying, still unresolved.**
-  - Prompts carry the whole doctrine. `README.md:23`, the README template, `crosscut/README.md` and now the site each carry a paraphrase plus a link.
-  - Meanwhile `docs/design.md:8-10` says restatements "must carry it forward whole".
-  - The site's own paragraph says "must pass on the doctrine", but it passes on a summary. That makes four documents in tension with `design.md` as written.
-- **No framing drift seen.**
-  - The new `setup.md` text (side effects of running things, existing concern systems as evidence, "a concern is … not for a single defect") and the new "readable in a minute or two" guidance in `concern-files.md` both push away from process.
-  - `grep -iE "ensure|required|must check|mandatory"` over `skill/` found nothing.
-- **Unknown:** whether Max intends paraphrase plus a link to count as carrying the doctrine. Only Max can say.
-- **Worth considering:**
-  - Name the two tiers in `docs/design.md`. One clause would settle the four tensions.
-  - Widen the grep and add `docs/index.html` and `crosscut/README.md` to its paths.
-  - A test that `doctrine()` ends at `## What to do` would make orientation's section cut structural.
+- **Prompts are still handled structurally.**
+  - `prompt()` (`src/main.rs:224`) still starts from the skill body.
+  - `refresh_prompt()` has moved to `:533`.
+  - The dry run still opens with `# CrossCut` / `## Doctrine (carry this forward)`.
+  - `orientation()` (`:204`) still embeds only what `doctrine()` (`:196`) cuts out. That is fine but easy to regress, and no test checks where the cut ends.
+- **Uncommitted change to `refresh_prompt()`:** it adds "Aim for a view of under 400 words … Start with the one sentence most worth knowing now." It comes after the full doctrine and pushes towards conclusions, not process, so there is no framing drift. It repeats guidance already in `concern-files.md`, which is harmless.
+- **Inventory.** No carrier was lost and none was added. The same places match: `SKILL.md:8,41-42,100`, `concern-files.md:155,194`, `README.md:23`, `AGENTS.md:7,9,23`, `docs/index.html:210`, `docs/design.md:9-10` and `crosscut/README.md:38`.
+- **The inventory's blind spot is unchanged.** The grep in "How to look" still leaves out `docs/index.html` and `crosscut/README.md`, and still misses `skill/modes/reconsider.md:38-39` ("passes on" / "carried"). A wider pattern, `carr|pass.* on`, does catch it. "How to look" is still stale here.
+- **The two tiers of carrying are still unresolved.**
+  - `docs/design.md:8-10` still says restatements "must carry it forward whole".
+  - `README.md`, the README template, `crosscut/README.md` and the site each carry a paraphrase plus a link.
+  - The `324221c` edit to `design.md` records the decision to delete `crates/standards` ("machinery for the machinery"). That reinforces the anti-gate framing, but it didn't touch this clause.
+- **No framing drift seen.** A search for `ensure|required|must check|mandatory` over `skill/` found nothing.
+- **Unknown:** whether Max counts paraphrase plus a link as carrying the doctrine. Only Max can answer that.
+- **Worth considering (unchanged, and cheap):**
+  - Add one clause to `docs/design.md` naming the two tiers.
+  - Widen the grep pattern and add the two missing paths to it.
+  - Add a test that `doctrine()` ends at `## What to do`.
 - **Since last view:**
-  - `crosscut/` is committed, so views now have git history.
-  - The site, the CI workflow and the site test were added.
-  - Changes to `setup.md` and `concern-files.md` were neutral to positive.
-- **Noticed along the way:** the Pages workflow publishes all of `docs/`, including `design.md`. That is probably harmless, since the repository is public.
+  - The headline fix and its test (19 → 20 tests).
+  - The design-notes update.
+  - The uncommitted word-limit nudge.
+  - None of these changed any carrier.

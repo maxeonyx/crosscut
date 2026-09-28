@@ -542,6 +542,8 @@ fn refresh_prompt(root: &Path, concern: &Concern, today: &str) -> String {
          - Concern: `crosscut/concerns/{}.md` (its full text is below).\n\
          - Today: {today}.\n{projects}\n\
          Do not modify any files. Read, and run only commands that do not change state.\n\n\
+         Aim for a view of under 400 words: the conclusions and the evidence that carries \
+         them, not the investigation. Start with the one sentence most worth knowing now.\n\n\
          When you are done, output the complete new section, starting with \
          `## Current view — {today}`, between `{VIEW_OPEN}` and `{VIEW_CLOSE}` on their own \
          lines. crosscut will replace the concern's current view with exactly that text, and \
