@@ -38,8 +38,12 @@ obligation.
 - **The harnesses.** Claude Code, Codex and OpenCode are all installed and
   authenticated. All three load Agent Skills (`SKILL.md` directories):
   Claude Code from `.claude/skills`, Codex from `.agents/skills`, and OpenCode
-  from both. All three have a one-shot non-interactive mode (`claude -p`,
-  `codex exec`, `opencode run`).
+  from both. On 2026-09-28, Codex 0.154 was observed listing a project-level
+  `.agents/skills/crosscut`. All three have a one-shot non-interactive mode
+  (`claude -p`, `codex exec`, `opencode run`). Real refreshes succeeded
+  through `claude` (about 10–60 s) and `codex` (about 20 s). This machine's
+  `opencode run` exits 0 with no output when its model is misconfigured, so
+  a missing view is reported together with the harness's stderr.
 - **Invocation libraries.** Every vendor SDK is a subprocess wrapper around
   the same CLI. ACP is the only live cross-harness standard, and it is built
   for editors (sessions, permission prompts, diffs), which is too much for a
