@@ -110,7 +110,7 @@
           <tr>
             <th class="corner"></th>
             <th>We can tell which version is live</th>
-            <th class="seed-label">Installed copies update themselves</th>
+            <th class="seed-label" id="task" data-general="Installed copies update themselves">Installed copies update themselves</th>
             <th>We can get the data back</th>
             <th class="more">Releases take one step</th>
             <th class="more">A fresh clone builds on its own</th>
@@ -179,6 +179,10 @@ crosscut install-skill   <span class="dim"># for Claude Code, Codex and OpenCode
 
   // Before the click, the map is one cell. On click it grows out of that cell: the cell and its
   // labels glide to their places and the other cells appear in order of distance from it.
+  // Before the click the column is the one task the agent was given; growing the map
+  // generalises it into the shared requirement.
+  const task = document.getElementById("task");
+  task.textContent = "Add self-update";
   body.classList.add("seeded");
   go.hidden = false;
   go.addEventListener("click", () => {
@@ -186,6 +190,8 @@ crosscut install-skill   <span class="dim"># for Claude Code, Codex and OpenCode
     const before = moving.map((el) => el.getBoundingClientRect());
     body.classList.remove("seeded");
     go.remove();
+    task.textContent = task.dataset.general;
+    task.classList.add("fade");
     if (still) return;
     moving.forEach((el, i) => {
       const after = el.getBoundingClientRect();
