@@ -5,237 +5,249 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
   <title>CrossCut</title>
-  <meta name="description" content="CrossCut keeps a map of the things every project eventually needs, such as version visibility, staying current and recoverable state, across all of your projects, so you and your agents can see the gaps and close them on purpose.">
+  <meta name="description" content="Every project needs to track many shared requirements. CrossCut gets your agent to advocate for them: it maps each requirement against every project, keeps the map current with the cheapest check that works, and never overwrites your decisions.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
       color-scheme: light dark;
-      --bg: #f8f6f1; --bg-elev: #fffdf8; --fg: #201c16; --muted: #6b6356;
-      --border: #e2dccf; --code-bg: #f0ebe0; --accent: #c2410c; --accent-soft: #fde7d6;
-      --yes: #2d7d46; --partly: #a16207; --missing: #c2410c; --decided: #6d28d9;
-      --radius: 10px;
+      --bg: #f8f6f1; --card: #fffdf8; --fg: #201c16; --muted: #6b6356; --line: #e2dccf; --code: #f0ebe0;
+      --accent: #c2410c; --glow: #fde7d6; --yes: #2d7d46; --partly: #a16207; --missing: #c2410c; --decided: #6d28d9;
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
-        --bg: #14120f; --bg-elev: #1b1814; --fg: #ece5d8; --muted: #a39a8b;
-        --border: #342e26; --code-bg: #1f1b16; --accent: #fb923c; --accent-soft: #3a2415;
-        --yes: #95dba7; --partly: #facc15; --missing: #fb923c; --decided: #c4b5fd;
+        --bg: #14120f; --card: #1c1915; --fg: #ece5d8; --muted: #a39a8b; --line: #353027; --code: #1f1b16;
+        --accent: #fb923c; --glow: #3a2415; --yes: #95dba7; --partly: #facc15; --missing: #fb923c; --decided: #c4b5fd;
       }
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
-    .container { max-width: 760px; margin: 0 auto; padding: 4rem 1rem 3rem; }
-    @media (min-width: 640px) { .container { padding-left: 2rem; padding-right: 2rem; } }
-    h1 { font-size: 2.6rem; letter-spacing: -0.03em; line-height: 1.1; }
-    h1 .x { color: var(--accent); }
-    h2 { font-size: 1.15rem; margin: 3rem 0 0.8rem; letter-spacing: -0.01em; }
-    p { margin: 0.7rem 0; }
-    .hero { text-align: center; }
-    .tagline { font-size: 1.2rem; color: var(--muted); margin: 0.6rem auto 0; max-width: 34rem; }
+    body { font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.55; }
+    main { max-width: 720px; margin: 0 auto; padding: 4.5rem 1.25rem 3rem; }
+    code, pre, .map td, .map tbody th { font-family: "IBM Plex Mono", ui-monospace, monospace; }
     a { color: var(--accent); }
-    code, pre, .grid { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace; }
-    code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; }
-    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; overflow-x: auto; line-height: 1.5; margin: 0.8rem 0; font-size: 0.85rem; }
-    pre code { background: none; padding: 0; font-size: 1em; }
-    .dim { color: var(--muted); }
 
-    /* The map. */
-    .map-wrap { margin: 2.2rem 0 0.6rem; overflow-x: auto; width: min(1080px, 100vw - 2rem); position: relative; left: 50%; transform: translateX(-50%); }
-    table.grid { border-collapse: separate; border-spacing: 0.35rem; font-size: 0.85rem; margin: 0 auto; }
-    .grid tbody th { position: sticky; left: 0; z-index: 1; background: var(--bg); white-space: normal; min-width: 9.5rem; max-width: 12rem; line-height: 1.25; font-family: "IBM Plex Sans", "Avenir Next", sans-serif; color: var(--fg); }
-    .grid th { font-weight: 500; color: var(--muted); text-align: left; padding: 0 0.3rem; white-space: nowrap; transition: opacity .7s ease; }
-    .grid td { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.55rem; white-space: nowrap; }
-    @media (max-width: 639px) { table.grid { font-size: 0.72rem; border-spacing: 0.2rem; } .grid td { padding: 0.3rem 0.35rem; } }
+    header { text-align: center; }
+    h1 { font-size: 3rem; letter-spacing: -0.035em; line-height: 1; }
+    h1 span { color: var(--accent); }
+    .tagline { color: var(--muted); font-size: 1.15rem; max-width: 30rem; margin: 0.8rem auto 0; }
+
+    /* The map: projects down, shared requirements across, and more requirements trailing off. */
+    #map { margin-top: 3.5rem; }
+    .lead { font-size: 1.4rem; line-height: 1.35; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 1.75rem; }
+    .scroll { overflow-x: auto; margin: 0 -1.25rem; padding: 0 1.25rem;
+              -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 4rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 4rem), transparent); }
+    table.map { border-collapse: separate; border-spacing: 6px; margin: -6px; }
+    .map thead th { font-weight: 500; font-size: 0.8rem; line-height: 1.25; color: var(--muted); text-align: left; vertical-align: bottom; width: 7rem; min-width: 7rem; padding: 0 0.15rem 0.2rem; }
+    .map tbody th { font-weight: 400; font-size: 0.82rem; text-align: right; white-space: nowrap; padding-right: 0.35rem; }
+    .map td { font-size: 0.82rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.6rem;
+              transition: box-shadow .25s ease, border-color .25s ease, opacity .25s ease; }
+    .map .more { opacity: 0.7; }
+    .map td.more { border-style: dashed; }
+    .map .more + .more { opacity: 0.45; }
+    .map .more + .more + .more { opacity: 0.22; }
     .yes { color: var(--yes); } .partly { color: var(--partly); } .missing { color: var(--missing); font-weight: 600; }
     .na { color: var(--muted); } .deferred { color: var(--decided); font-style: italic; }
-    .grid td[data-note] { border-style: dashed; cursor: help; }
-    .grid td[data-note]:hover, .grid td[data-note]:focus { border-style: solid; border-color: currentColor; outline: none; }
-    .tip { position: fixed; z-index: 10; max-width: 16rem; background: var(--fg); color: var(--bg); font-size: 0.85rem; line-height: 1.35;
-           padding: 0.45rem 0.65rem; border-radius: 6px; pointer-events: none; box-shadow: 0 8px 24px -10px rgba(0,0,0,.4); }
-    .grid td.asked { border-color: var(--yes); box-shadow: 0 0 0 2px color-mix(in srgb, var(--yes) 25%, transparent); }
-    /* The seed: before the click, the grid is only the one lit cell and its two labels. */
-    .seed .grid tbody tr:not(.asked), .seed .grid th:not(.asked):not(.corner), .seed .grid td:not(.asked) { display: none; }
-    .grid .grow { animation: grow .55s cubic-bezier(.2,.7,.2,1) both; }
-    @keyframes grow { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
-    .controls { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1rem; margin-top: 0.8rem; }
-    button { font: inherit; font-size: 1.15rem; font-weight: 700; color: var(--bg); background: var(--accent); border: 0; border-radius: 999px;
-             padding: 0.8rem 1.8rem; cursor: pointer; box-shadow: 0 6px 20px -8px var(--accent); animation: nudge 2.4s ease-in-out infinite; }
-    button:hover { transform: translateY(-1px); }
-    @keyframes nudge { 0%, 100% { box-shadow: 0 6px 20px -8px var(--accent), 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
-                       50% { box-shadow: 0 6px 20px -8px var(--accent), 0 0 0 10px transparent; } }
-    .gated #rest, .gated footer { display: none; }
-    #rest { animation: appear .8s ease both 1.5s; }
-    @keyframes appear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
-    button:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+    .map td.seed { border-color: var(--yes); box-shadow: 0 0 0 3px color-mix(in srgb, var(--yes) 22%, transparent); }
+    .map td[data-q] { border-style: dashed; cursor: help; }
+    .map td[data-q]:hover, .map td[data-q]:focus-visible { border-style: solid; border-color: currentColor; outline: none; }
 
-    /* The scorecard we will never ship. */
-    .scorecard { position: relative; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; margin: 1rem 0; max-width: 420px;
-                 font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.85rem; color: var(--muted); }
-    .scorecard .row { display: flex; justify-content: space-between; }
-    .scorecard::after { content: "no."; position: absolute; inset: 0; display: grid; place-items: center; font-family: "IBM Plex Sans", sans-serif; font-size: 3.4rem; font-weight: 800;
-                        color: var(--accent); transform: rotate(-8deg); letter-spacing: -0.04em;
-                        background: linear-gradient(to top right, transparent calc(50% - 2px), var(--accent) calc(50% - 2px), var(--accent) calc(50% + 2px), transparent calc(50% + 2px)); opacity: 0.92; }
-    ol.tiers { list-style: none; counter-reset: tier -1; margin: 0.8rem 0; }
-    ol.tiers li { counter-increment: tier; margin: 0.55rem 0; padding-left: 2.2rem; position: relative; }
-    ol.tiers li::before { content: counter(tier); position: absolute; left: 0; top: 0.05rem; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--accent-soft);
-                          color: var(--accent); font-weight: 700; font-size: 0.85rem; display: grid; place-items: center; }
-    .contagious { border-left: 3px solid var(--accent); padding: 0.2rem 0 0.2rem 1rem; margin: 1rem 0; }
-    footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); padding-top: 1.6rem; margin-top: 3.5rem; }
-    footer a { color: var(--fg); text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
+    .legend { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; font-size: 0.88rem; line-height: 1.45; margin-top: 2rem; }
+    .legend li:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+    .legend b { display: block; font-size: 0.72rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 0.15rem; }
+    .legend b.deferred { text-transform: none; letter-spacing: 0; font-size: 0.82rem; font-family: "IBM Plex Mono", monospace; }
+    /* Hovering a legend item lights up what it describes. */
+    .map.pointing td { opacity: 0.3; }
+    .map.pointing td.lit { opacity: 1; border-color: var(--accent); }
+
+    /* Before the click: the map is one cell, the thing the agent was asked for. */
+    .seeded .lead, .seeded .legend, .seeded .rest { display: none; }
+    .seeded .scroll { -webkit-mask-image: none; mask-image: none; }
+    .seeded table.map { margin: -6px auto; }
+    .seeded .map tbody tr:not(.seed-row), .seeded .map th:not(.seed-label):not(.corner), .seeded .map td:not(.seed) { display: none; }
+    .go { display: block; margin: 2.5rem auto 0; font: inherit; font-size: 1.1rem; font-weight: 700; color: var(--bg); background: var(--accent);
+          border: 0; border-radius: 999px; padding: 0.85rem 1.8rem; cursor: pointer; animation: nudge 2.4s ease-in-out infinite; }
+    .go:focus-visible { outline: 3px solid var(--glow); outline-offset: 3px; }
+    @keyframes nudge { 0%, 100% { box-shadow: 0 6px 20px -8px var(--accent), 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+                       50% { box-shadow: 0 6px 20px -8px var(--accent), 0 0 0 12px transparent; } }
+    .grow { animation: grow .55s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes grow { from { opacity: 0; transform: scale(.6); } }
+    .fade { animation: fade .7s ease both; }
+    @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+
+    .tip { position: fixed; z-index: 10; max-width: 17rem; background: var(--fg); color: var(--bg); font-size: 0.85rem; line-height: 1.35;
+           padding: 0.5rem 0.7rem; border-radius: 7px; pointer-events: none; box-shadow: 0 10px 28px -12px rgba(0,0,0,.45); }
+    .tip b { display: block; font-weight: 600; }
+
+    h2 { font-size: 1rem; margin: 3.5rem 0 0.8rem; }
+    pre { background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem 1rem; font-size: 0.78rem; line-height: 1.55; overflow-x: auto; }
+    pre + pre { margin-top: 0.75rem; }
+    .dim { color: var(--muted); }
+    p + p, pre + p { margin-top: 0.8rem; }
+    footer { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--line); }
+    footer p + p { margin-top: 0.6rem; }
+    footer a { color: var(--fg); }
+
+    @media (max-width: 680px) {
+      h1 { font-size: 2.5rem; }
+      .legend { grid-template-columns: 1fr 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header class="hero">
-      <h1>Cross<span class="x">Cut</span></h1>
-      <p class="tagline">Raise the waterline across your breadth of projects, like a well-seasoned engineer.</p>
-    </header>
+<main>
+  <header>
+    <h1>Cross<span>Cut</span></h1>
+    <p class="tagline">Raise the waterline across your breadth of projects, like a well-seasoned engineer.</p>
+  </header>
 
-    <div id="field">
-      <div class="map-wrap" id="scroller">
-      <table class="grid" aria-label="An invented team's projects: concerns by project">
-        <thead><tr><th class="corner"></th><th>auth-lib</th><th>data-cli</th><th>billing-api</th><th class="asked">ops-cli</th><th>billing-web</th><th>nightly-backup</th><th>photo-server</th></tr></thead>
+  <section id="map" aria-label="An example map">
+    <p class="lead">Every project needs to track many shared requirements. CrossCut gets your agent to advocate for them.</p>
+    <div class="scroll">
+      <table class="map">
+        <thead>
+          <tr>
+            <th class="corner"></th>
+            <th>We can tell which version is live</th>
+            <th class="seed-label">Installed copies update themselves</th>
+            <th>We can get the data back</th>
+            <th class="more">Releases take one step</th>
+            <th class="more">A fresh clone builds on its own</th>
+            <th class="more">An agent can work on it</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><th>We can get the data back</th><td class="na">n/a</td><td class="na">n/a</td><td class="partly" data-note="One copy of the invoices, overwritten nightly.">partly</td><td class="na">n/a</td><td class="na">n/a</td><td class="na">n/a</td><td class="missing" data-note="Every team photo, one disk.">missing</td></tr>
-          <tr class="asked"><th class="asked">Installed copies update themselves</th><td class="na">n/a</td><td class="missing" data-note="ops-cli updates itself. Its sibling never got it.">missing</td><td class="na">n/a</td><td class="yes asked">yes</td><td class="na">n/a</td><td class="na">n/a</td><td class="missing" data-note="Pinned image. Nothing proposes upgrades.">missing</td></tr>
-          <tr><th>We can tell which version is live</th><td class="yes">yes</td><td class="missing" data-note="No --version either.">missing</td><td class="missing" data-note="Nothing says what's deployed.">missing</td><td class="yes">yes</td><td class="yes">yes</td><td class="deferred" data-note="Someone decided. It stays decided.">deferred</td><td class="partly" data-note="The compose file says which tag. Nothing says what's running.">partly</td></tr>
+          <tr><th>auth-lib</th><td class="yes">yes</td><td class="na">n/a</td><td class="na">n/a</td><td class="more"></td><td class="more"></td><td class="more"></td></tr>
+          <tr><th>data-cli</th><td class="missing" data-q="Which data-cli are you running?|No way to tell: there is no --version.">missing</td><td class="missing" data-q="Did data-cli ever get self-update?|No. Its sibling ops-cli did, and nobody asked for this one.">missing</td><td class="na">n/a</td><td class="more"></td><td class="more"></td><td class="more"></td></tr>
+          <tr><th>billing-api</th><td class="missing" data-q="Which billing-api is live?|Nothing says what is deployed.">missing</td><td class="na">n/a</td><td class="partly" data-q="Could you restore last month's invoices?|Partly: there is one copy, and it is overwritten every night.">partly</td><td class="more"></td><td class="more"></td><td class="more"></td></tr>
+          <tr class="seed-row"><th class="seed-label">ops-cli</th><td class="yes">yes</td><td class="yes seed">yes</td><td class="na">n/a</td><td class="more"></td><td class="more"></td><td class="more"></td></tr>
+          <tr><th>billing-web</th><td class="yes">yes</td><td class="na">n/a</td><td class="na">n/a</td><td class="more"></td><td class="more"></td><td class="more"></td></tr>
+          <tr><th>nightly-backup</th><td class="deferred" data-q="Should nightly-backup report its version?|Decided: no. It is being retired, and no check will overwrite that.">deferred</td><td class="na">n/a</td><td class="na">n/a</td><td class="more"></td><td class="more"></td><td class="more"></td></tr>
+          <tr><th>photo-server</th><td class="partly" data-q="Which photo-server is running?|The compose file names a tag. Nothing confirms it.">partly</td><td class="missing" data-q="Does photo-server ever get upgraded?|Only when someone remembers to bump the tag.">missing</td><td class="missing" data-q="Is anything backing up the photos?|No. Every photo is on one disk.">missing</td><td class="more"></td><td class="more"></td><td class="more"></td></tr>
         </tbody>
       </table>
-      </div>
     </div>
-    <div class="controls">
-      <button id="widen" type="button" hidden>Claude, set up maxeonyx/crosscut for me</button>
-    </div>
+    <ul class="legend">
+      <li data-show="col"><b>A column</b>One shared requirement. There is no fixed list: start from about thirty seeds and add your own.</li>
+      <li data-show="row"><b>A row</b>One of your projects.</li>
+      <li data-show="cell"><b>A cell</b>The cheapest check that answers it: an existing tool, a script, or a prompt.</li>
+      <li data-show="decided"><b class="deferred">deferred</b>Your decision. No check overwrites it.</li>
+    </ul>
+  </section>
 
-    <div id="rest">
+  <button class="go" id="go" type="button" hidden>Claude, set up maxeonyx/crosscut for me</button>
 
-    <h2>Why</h2>
-    <p>Every project needs to track many shared requirements. CrossCut gets your agent to advocate for them.</p>
-
-    <h2>What it isn't</h2>
-    <div class="scorecard" aria-label="A compliance scorecard, crossed out">
-      <div class="row"><span>QUALITY REPORT</span><span>62%</span></div>
-      <div class="row"><span>security</span><span>FAIL</span></div>
-      <div class="row"><span>docs</span><span>PASS</span></div>
-      <div class="row"><span>vibes</span><span>PENDING</span></div>
-    </div>
-    <p>No scores. A map full of gaps is a good map.</p>
-
-    <h2>Cheapest check wins</h2>
-    <ol class="tiers">
-      <li>Design it away.</li>
-      <li>An existing tool.</li>
-      <li>Your own script, with fixtures.</li>
-      <li>A prompt, with fixtures.</li>
-    </ol>
-
-    <h2>What it looks like</h2>
+  <div class="rest">
+    <h2>It's plain files and real checks</h2>
 <pre><code><span class="dim">$</span> crosscut check
-staying-current/data-cli: (none) → missing: CLI has no self-updater; installed copies stay where they were installed
+staying-current/data-cli: (none) → missing: CLI has no self-updater
 staying-current/ops-cli: (none) → yes: CLI depends on self_update
-staying-current/photo-server: (none) → missing: docker-compose.yml pins images and nothing proposes upgrades
 version-visibility/billing-web: (none) → yes: site publishes version.json with a commit
 <span class="dim">…</span>
-14 cells checked: 14 changed, 0 could not run      <span class="dim"># no model involved</span>
-
-<span class="dim">$</span> crosscut check --agentic recoverable-state      <span class="dim"># one agent per cell</span>
-recoverable-state/photo-server: (none) → missing: holds photos (/srv/photos) and a catalogue
-  (vault-db volume) with no backup, no off-machine copy, and no sign of a restore
+14 cells checked: 14 changed, 0 could not run
 
 <span class="dim">$</span> crosscut test
-18 fixture cells: 18 as expected, 0 not            <span class="dim"># the checks, checked</span>
-
-<span class="dim">$</span> git diff crosscut/                             <span class="dim"># the history of the map</span></code></pre>
-
-    <h2>The whole format</h2>
+18 fixture cells: 18 as expected, 0 not</code></pre>
 <pre><code>crosscut/
-  projects                       <span class="dim">projects/*</span>
+  projects                     <span class="dim">one path or glob per line</span>
   concerns/staying-current/
-    concern.md                   <span class="dim">user stories, what it looks like here, decisions</span>
-    check                        <span class="dim">prints "yes: …" for one project</span>
-    fixtures/basic/              <span class="dim">invented projects + expected answers</span>
-    observed.tsv                 <span class="dim">written by the tool, committed</span></code></pre>
-    <p>Plain files. Your decisions stay yours. Git is the history.</p>
+    concern.md                 <span class="dim">user stories, and your decisions</span>
+    check                      <span class="dim">prints "yes: …" for one project</span>
+    fixtures/                  <span class="dim">test projects with known answers</span>
+    observed.tsv               <span class="dim">written by the tool; git keeps its history</span></code></pre>
+    <p>Checks that need judgment are prompts, run through the coding agent you already use, one agent per cell. Everything else runs without a model.</p>
 
-    <h2>Get it</h2>
+    <h2>Try it</h2>
 <pre><code>cargo install --git https://github.com/maxeonyx/crosscut --locked
-crosscut install-skill      <span class="dim"># Claude Code, Codex, OpenCode</span></code></pre>
-    <p>Then: <em>“Claude, use CrossCut here.”</em></p>
-
-    <h2>The contagious paragraph</h2>
-    <p class="contagious">Anything that passes CrossCut on must pass on <a href="https://github.com/maxeonyx/crosscut/blob/main/skill/SKILL.md">the doctrine</a>, together with the requirement to pass on both the doctrine and this requirement.</p>
-
-    </div>
-
-    <footer>
-      <a href="https://github.com/maxeonyx/crosscut">GitHub</a>
-      <p>Part of <a href="https://tools.maxeonyx.com">maxeonyx agent-tools</a>: <a href="https://trunc.maxeonyx.com">trunc</a> | <a href="https://tmux-bridge.maxeonyx.com">tb</a> | <a href="https://dotsync.maxeonyx.com">dotsync</a> | <a href="https://tdd-ratchet.maxeonyx.com">tdd-ratchet</a> | <a href="https://crosscut.maxeonyx.com">crosscut</a></p>
-    </footer>
+crosscut install-skill   <span class="dim"># for Claude Code, Codex and OpenCode</span></code></pre>
+    <p>Then ask your agent: <em>“Use CrossCut here.”</em> It proposes requirements, writes the cheapest check for each, and fills in the map.</p>
+    <p>Just fixed a bug? Ask: <em>“What does this reveal?”</em> It names the requirement the bug broke, checks whether your other projects meet it, and offers to put it on the map.</p>
+    <p>Read <a href="https://github.com/maxeonyx/crosscut">the repository</a>, <a href="https://github.com/maxeonyx/crosscut/blob/main/skill/SKILL.md">the skill</a> your agent follows, or <a href="https://github.com/maxeonyx/crosscut/blob/main/docs/design.md">why it is built this way</a>.</p>
   </div>
-  <script>
-    // Before the click, the grid is one cell: what the agent was asked about. On click the grid
-    // grows out of it: the table glides so that cell lands in its real place, and the other cells
-    // appear in order of their distance from it.
-    const field = document.getElementById("field");
-    const scroller = document.getElementById("scroller");
-    const table = scroller.querySelector("table");
-    const seed = table.querySelector("td.asked");
-    const widen = document.getElementById("widen");
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    document.body.classList.add("gated");
-    field.classList.add("seed");
-    widen.hidden = false;
-    widen.addEventListener("click", () => {
-      // The seed cell and its two labels glide from where they were to where they now belong.
-      const moving = [seed, table.querySelector("thead th.asked"), table.querySelector("tbody th.asked")];
-      const before = moving.map((el) => el.getBoundingClientRect());
-      field.classList.remove("seed");
-      scroller.scrollLeft = seed.offsetLeft - (scroller.clientWidth - seed.offsetWidth) / 2;
-      widen.remove();
-      document.body.classList.remove("gated");
-      if (still) return;
-      moving.forEach((el, i) => {
-        const after = el.getBoundingClientRect();
-        el.style.transform = `translate(${before[i].left - after.left}px, ${before[i].top - after.top}px)`;
-      });
-      table.getBoundingClientRect();
-      moving.forEach((el) => {
-        el.style.transition = "transform .8s cubic-bezier(.2,.7,.2,1)";
-        el.style.transform = "";
-      });
-      const rows = [...table.rows];
-      const seedRow = rows.indexOf(seed.parentElement), seedCol = seed.cellIndex;
-      rows.forEach((row, r) => [...row.cells].forEach((cell, c) => {
-        if (cell === seed || cell.classList.contains("asked")) return;
-        cell.style.animationDelay = `${250 + 90 * (Math.abs(r - seedRow) + Math.abs(c - seedCol))}ms`;
-        cell.classList.add("grow");
-      }));
-    });
+</main>
 
-    // Explanations: hover a cell (or tap it) to see why it says what it says.
-    const tip = document.createElement("div");
-    tip.className = "tip";
-    tip.hidden = true;
-    document.body.append(tip);
-    const show = (cell) => {
-      tip.textContent = cell.dataset.note;
-      tip.hidden = false;
-      const r = cell.getBoundingClientRect();
-      const left = Math.min(Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2), innerWidth - tip.offsetWidth - 8);
-      tip.style.left = `${left}px`;
-      tip.style.top = `${r.top - tip.offsetHeight - 8 < 8 ? r.bottom + 8 : r.top - tip.offsetHeight - 8}px`;
-    };
-    const hide = () => { tip.hidden = true; };
-    for (const cell of table.querySelectorAll("td[data-note]")) {
-      cell.tabIndex = 0;
-      cell.addEventListener("pointerenter", () => show(cell));
-      cell.addEventListener("pointerleave", hide);
-      cell.addEventListener("focus", () => show(cell));
-      cell.addEventListener("blur", hide);
+<footer class="rest">
+  <p>Anything that passes CrossCut on must pass on <a href="https://github.com/maxeonyx/crosscut/blob/main/skill/SKILL.md">the doctrine</a>, together with the requirement to pass on both the doctrine and this requirement.</p>
+  <p>Part of <a href="https://tools.maxeonyx.com">maxeonyx agent-tools</a>: <a href="https://trunc.maxeonyx.com">trunc</a> · <a href="https://tmux-bridge.maxeonyx.com">tb</a> · <a href="https://dotsync.maxeonyx.com">dotsync</a> · <a href="https://tdd-ratchet.maxeonyx.com">tdd-ratchet</a> · <a href="https://github.com/maxeonyx/crosscut">GitHub</a></p>
+</footer>
+
+<script>
+  const body = document.body, table = document.querySelector("table.map"), go = document.getElementById("go");
+  const seed = table.querySelector("td.seed");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Before the click, the map is one cell. On click it grows out of that cell: the cell and its
+  // labels glide to their places and the other cells appear in order of distance from it.
+  body.classList.add("seeded");
+  go.hidden = false;
+  go.addEventListener("click", () => {
+    const moving = [seed, ...table.querySelectorAll(".seed-label")];
+    const before = moving.map((el) => el.getBoundingClientRect());
+    body.classList.remove("seeded");
+    go.remove();
+    if (still) return;
+    moving.forEach((el, i) => {
+      const after = el.getBoundingClientRect();
+      el.style.transform = `translate(${before[i].left - after.left}px, ${before[i].top - after.top}px)`;
+    });
+    table.getBoundingClientRect();
+    moving.forEach((el) => { el.style.transition = "transform .8s cubic-bezier(.2,.7,.2,1)"; el.style.transform = ""; });
+    const rows = [...table.rows], r0 = rows.indexOf(seed.parentElement), c0 = seed.cellIndex;
+    rows.forEach((row, r) => [...row.cells].forEach((cell, c) => {
+      if (moving.includes(cell)) return;
+      cell.style.animationDelay = `${200 + 90 * (Math.abs(r - r0) + Math.abs(c - c0))}ms`;
+      cell.classList.add("grow");
+    }));
+    let delay = 1.2;
+    for (const el of document.querySelectorAll(".lead, .legend, .rest")) {
+      el.style.animationDelay = `${delay}s`;
+      el.classList.add("fade");
+      delay += 0.15;
     }
-    addEventListener("scroll", hide, { passive: true });
-    scroller.addEventListener("scroll", hide, { passive: true });
-  </script>
+  });
+
+  // Every gap has a question behind it: hover or tap a dashed cell to see it.
+  const tip = Object.assign(document.createElement("div"), { className: "tip", hidden: true });
+  body.append(tip);
+  const hide = () => { tip.hidden = true; };
+  const show = (cell) => {
+    const [q, a] = cell.dataset.q.split("|");
+    tip.replaceChildren(Object.assign(document.createElement("b"), { textContent: q }), a);
+    tip.hidden = false;
+    const r = cell.getBoundingClientRect();
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2), innerWidth - tip.offsetWidth - 8);
+    const above = r.top - tip.offsetHeight - 8;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${above < 8 ? r.bottom + 8 : above}px`;
+  };
+  for (const cell of table.querySelectorAll("td[data-q]")) {
+    cell.tabIndex = 0;
+    cell.setAttribute("aria-description", cell.dataset.q.replace("|", " "));
+    cell.addEventListener("pointerenter", () => show(cell));
+    cell.addEventListener("pointerleave", hide);
+    cell.addEventListener("focus", () => show(cell));
+    cell.addEventListener("blur", hide);
+  }
+  addEventListener("scroll", hide, { passive: true });
+  document.querySelector(".scroll").addEventListener("scroll", hide, { passive: true });
+
+  // The legend points at the grid: hovering an item lights up what it describes.
+  const select = {
+    col: () => table.querySelectorAll("tbody td:nth-child(3)"),
+    row: () => seed.parentElement.querySelectorAll("td:not(.more)"),
+    cell: () => [table.querySelector("td[data-q*='backing up']")],
+    decided: () => table.querySelectorAll("td.deferred"),
+  };
+  for (const item of document.querySelectorAll(".legend li")) {
+    item.tabIndex = 0;
+    const on = () => { table.classList.add("pointing"); select[item.dataset.show]().forEach((td) => td.classList.add("lit")); };
+    const off = () => { table.classList.remove("pointing"); table.querySelectorAll(".lit").forEach((td) => td.classList.remove("lit")); };
+    item.addEventListener("pointerenter", on);
+    item.addEventListener("pointerleave", off);
+    item.addEventListener("focus", on);
+    item.addEventListener("blur", off);
+  }
+</script>
 </body>
 </html>
