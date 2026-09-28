@@ -29,7 +29,8 @@
     h1 .x { color: var(--accent); }
     h2 { font-size: 1.15rem; margin: 3rem 0 0.8rem; letter-spacing: -0.01em; }
     p { margin: 0.7rem 0; }
-    .tagline { font-size: 1.2rem; color: var(--muted); margin-top: 0.6rem; }
+    .hero { text-align: center; }
+    .tagline { font-size: 1.2rem; color: var(--muted); margin: 0.6rem auto 0; max-width: 34rem; }
     a { color: var(--accent); }
     code, pre, .grid { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace; }
     code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; }
@@ -49,13 +50,19 @@
     .yes { color: var(--yes); } .partly { color: var(--partly); } .missing { color: var(--missing); font-weight: 600; }
     .na { color: var(--muted); } .deferred { color: var(--decided); font-style: italic; }
     .grid td.asked { border-color: var(--yes); box-shadow: 0 0 0 2px color-mix(in srgb, var(--yes) 25%, transparent); }
-    .narrow .grid td:not(.asked), .narrow .grid th:not(.asked) { opacity: 0; filter: blur(5px); transform: scale(.94); }
+    .single { display: grid; grid-template-columns: auto auto; grid-template-areas: ". col" "row cell"; gap: 0.35rem 0.8rem;
+              justify-content: center; align-items: center; margin: 3.5rem 0 2.5rem; font-size: 1.05rem; }
+    .single .col { grid-area: col; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--muted); font-size: 0.9rem; }
+    .single .row { grid-area: row; text-align: right; max-width: 14rem; line-height: 1.3; }
+    .single .cell { grid-area: cell; font-family: "IBM Plex Mono", ui-monospace, monospace; background: var(--bg-elev); border: 1px solid var(--yes);
+                    border-radius: 6px; padding: 0.45rem 0.9rem; box-shadow: 0 0 0 3px color-mix(in srgb, var(--yes) 25%, transparent); }
+    .gated #field { display: none; }
+    #field { animation: appear .8s ease both; }
     .notes { list-style: none; margin-top: 1rem; font-size: 0.9rem; transition: opacity .8s ease .9s; }
-    .narrow .notes { opacity: 0; }
     .notes li { margin: 0.3rem 0; padding-left: 1.2rem; position: relative; }
+    .notes li.dim::before { content: ""; }
     .notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
     .controls { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1rem; margin-top: 0.8rem; }
-    .caption { font-size: 1rem; color: var(--muted); }
     button { font: inherit; font-size: 1.15rem; font-weight: 700; color: var(--bg); background: var(--accent); border: 0; border-radius: 999px;
              padding: 0.8rem 1.8rem; cursor: pointer; box-shadow: 0 6px 20px -8px var(--accent); animation: nudge 2.4s ease-in-out infinite; }
     button:hover { transform: translateY(-1px); }
@@ -86,8 +93,16 @@
 </head>
 <body>
   <div class="container">
-    <h1>Cross<span class="x">Cut</span></h1>
-    <p class="tagline">A seasoned engineer's breadth, raising the waterline across every project you've got.</p>
+    <header class="hero">
+      <h1>Cross<span class="x">Cut</span></h1>
+      <p class="tagline">Raise the waterline across your breadth of projects, like a well-seasoned engineer.</p>
+    </header>
+
+    <div class="single" id="single" hidden aria-hidden="true">
+      <span class="col">ops-cli</span>
+      <span class="row">Installed copies update themselves</span>
+      <span class="cell yes">yes</span>
+    </div>
 
     <div id="field">
       <div class="map-wrap" id="scroller">
@@ -105,11 +120,11 @@
         <li><strong>photo-server</strong> holds every team photo. Nothing backs them up.</li>
         <li><strong>billing-api</strong> holds customer invoices. Its only copy is overwritten every night.</li>
         <li><strong>deferred</strong> is a decision, not a gap: the agent proposed it, the team lead confirmed it (“it's being retired”). No run overwrites it.</li>
+        <li class="dim">An invented team's projects. Yours will look different.</li>
       </ul>
     </div>
     <div class="controls">
-      <span class="caption" id="caption">You asked your agent to give ops-cli self-update. It did.</span>
-      <button id="widen" type="button" hidden>Now look around →</button>
+      <button id="widen" type="button" hidden>Claude, set up maxeonyx/crosscut for me</button>
     </div>
 
     <div id="rest">
@@ -181,21 +196,16 @@ crosscut install-skill      <span class="dim"># Claude Code, Codex, OpenCode</sp
     </footer>
   </div>
   <script>
-    // Start with what the agent saw: the one cell it was asked about. Everything else waits.
-    const field = document.getElementById("field");
+    // Start with what the agent saw: one cell. Everything else waits behind the button.
+    const single = document.getElementById("single");
     const widen = document.getElementById("widen");
     document.body.classList.add("gated");
-    field.classList.add("narrow");
-    // Keep the one lit cell in the middle, even when the map is wider than the screen.
-    const scroller = document.getElementById("scroller");
-    const lit = scroller.querySelector("td.asked");
-    scroller.scrollLeft = lit.offsetLeft - (scroller.clientWidth - lit.offsetWidth) / 2;
+    single.hidden = false;
     widen.hidden = false;
     widen.addEventListener("click", () => {
-      document.body.classList.remove("gated");
-      field.classList.remove("narrow");
+      single.remove();
       widen.remove();
-      document.getElementById("caption").textContent = "An invented team's projects, as CrossCut maps them.";
+      document.body.classList.remove("gated");
     });
   </script>
 </body>
