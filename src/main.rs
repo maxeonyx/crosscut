@@ -4,9 +4,10 @@
 //! The substance of CrossCut is the skill in `skill/`. This binary only carries
 //! it and does the few mechanical jobs that are fiddly to do by hand.
 
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
+use std::time::{Duration, Instant};
 
 use clap::{Parser, Subcommand};
 
@@ -116,6 +117,9 @@ enum Cmd {
         after_help = "Harness: --harness claude|codex|opencode, or any shell command that reads the\n\
         prompt on stdin and prints the reply. Defaults to $CROSSCUT_HARNESS, then the first of\n\
         claude, codex, opencode on PATH.\n\n\
+        The agent gets a shell in the working directory so it can run \"How to look\" commands.\n\
+        It is asked not to change anything, but only codex enforces that (read-only sandbox,\n\
+        usually without network). Treat concern files like scripts: refresh only ones you trust.\n\n\
         Examples:\n  $ crosscut refresh\n  $ crosscut refresh recovery agent-guidance --harness codex\n  \
         $ crosscut refresh --dry-run"
     )]
@@ -124,6 +128,12 @@ enum Cmd {
         slugs: Vec<String>,
         #[arg(long)]
         harness: Option<String>,
+        /// Model for claude, codex or opencode (for a custom command, put it in the command).
+        #[arg(long)]
+        model: Option<String>,
+        /// Minutes to allow each concern before stopping its harness.
+        #[arg(long, default_value_t = 30)]
+        timeout: u64,
         /// Directory containing crosscut/ (default: search upwards from here).
         #[arg(long)]
         root: Option<PathBuf>,
@@ -149,9 +159,11 @@ fn main() -> ExitCode {
         Some(Cmd::Refresh {
             slugs,
             harness,
+            model,
+            timeout,
             root,
             dry_run,
-        }) => refresh(slugs, harness, root, dry_run),
+        }) => refresh(slugs, harness, model, timeout, root, dry_run),
     };
     result.unwrap_or_else(|message| {
         eprintln!("crosscut: {message}");
@@ -220,7 +232,8 @@ fn prompt(mode: &str) -> Result<String, String> {
     }
     let mut out = String::from(skill_body());
     out.push_str(
-        "\n---\n\nThe files this prompt refers to are included below, so ignore their links.\n",
+        "\n---\n\nThe files this prompt refers to are included below, so ignore their links. \
+         Line numbers in this prompt are not line numbers in any file.\n",
     );
     for path in refs {
         out.push_str(&format!(
@@ -298,8 +311,11 @@ impl Concern {
     fn view_start(&self) -> Option<usize> {
         let mut offset = 0;
         let mut found = None;
+        let mut fenced = false;
         for line in self.text.split_inclusive('\n') {
-            if line.starts_with(VIEW_HEADING) {
+            if line.trim_start().starts_with("```") {
+                fenced = !fenced;
+            } else if !fenced && line.starts_with(VIEW_HEADING) {
                 found = Some(offset);
             }
             offset += line.len();
@@ -307,7 +323,7 @@ impl Concern {
         found
     }
 
-    /// The date on the view heading and the view's first line of prose.
+    /// The date on the view heading and the first sentence of the view.
     fn view_summary(&self) -> Option<(String, String)> {
         let view = &self.text[self.view_start()?..];
         let mut lines = view.lines();
@@ -317,10 +333,13 @@ impl Concern {
             .trim_start_matches([' ', '—', '-', ':'])
             .trim()
             .to_string();
-        let headline = lines
+        let first = lines
             .map(str::trim)
             .find(|line| !line.is_empty())
-            .unwrap_or("")
+            .unwrap_or("");
+        let headline = first
+            .find(". ")
+            .map_or(first, |end| &first[..=end])
             .to_string();
         Some((date, headline))
     }
@@ -405,19 +424,22 @@ impl Harness {
     }
 
     /// The command to run, and whether the prompt goes on stdin (otherwise it is the last argument).
-    fn command(&self, prompt: &str) -> (Command, bool) {
-        match self {
-            // Read-only tools plus Bash, so "How to look" commands can run; the view is
-            // returned as text and crosscut writes it, so no edit permission is needed.
+    fn command(&self, prompt: &str, model: Option<&str>) -> Result<(Command, bool), String> {
+        let (mut cmd, stdin) = match self {
+            // Bash is needed to run "How to look" commands. The edit tools are denied and the
+            // target's project settings (hooks, MCP servers, allow rules) are not loaded,
+            // because the target may not be trusted. The view comes back as text.
             Harness::Claude => {
                 let mut cmd = Command::new("claude");
                 cmd.args([
                     "-p",
                     "--no-session-persistence",
-                    "--permission-mode",
-                    "dontAsk",
+                    "--setting-sources",
+                    "user",
                 ])
-                .args(["--allowedTools", "Read,Grep,Glob,Bash,WebFetch,WebSearch"]);
+                .args(["--permission-mode", "dontAsk"])
+                .args(["--allowedTools", "Read,Grep,Glob,Bash,WebFetch,WebSearch"])
+                .args(["--disallowedTools", "Edit,Write,NotebookEdit"]);
                 (cmd, true)
             }
             Harness::Codex => {
@@ -428,16 +450,14 @@ impl Harness {
                     "read-only",
                     "--skip-git-repo-check",
                     "--ephemeral",
-                    "-",
                 ]);
                 (cmd, true)
             }
-            Harness::OpenCode => {
-                let mut cmd = Command::new("opencode");
-                cmd.args(["run", prompt]);
-                (cmd, false)
-            }
+            Harness::OpenCode => (Command::new("opencode"), false),
             Harness::Shell(command) => {
+                if model.is_some() {
+                    return Err("--model only applies to claude, codex and opencode; put the model in your command".into());
+                }
                 let mut cmd = if cfg!(windows) {
                     let mut cmd = Command::new("cmd");
                     cmd.args(["/C", command]);
@@ -450,21 +470,45 @@ impl Harness {
                 cmd.env_remove("CROSSCUT_HARNESS");
                 (cmd, true)
             }
+        };
+        if let Some(model) = model {
+            cmd.args([
+                if matches!(self, Harness::Claude) {
+                    "--model"
+                } else {
+                    "-m"
+                },
+                model,
+            ]);
         }
-    }
-
-    fn describe(&self) -> String {
         match self {
-            Harness::Claude => "claude -p --no-session-persistence --permission-mode dontAsk \
-                --allowedTools Read,Grep,Glob,Bash,WebFetch,WebSearch  (prompt on stdin)"
-                .into(),
             Harness::Codex => {
-                "codex exec --sandbox read-only --skip-git-repo-check --ephemeral -  (prompt on stdin)".into()
+                cmd.arg("-");
             }
-            Harness::OpenCode => "opencode run <prompt>".into(),
-            Harness::Shell(command) => format!("{command}  (prompt on stdin)"),
+            Harness::OpenCode => {
+                cmd.args(["run", prompt]);
+            }
+            _ => {}
         }
+        Ok((cmd, stdin))
     }
+}
+
+/// How a command will be run, for --dry-run, with a prompt argument elided.
+fn describe(cmd: &Command, stdin: bool, prompt: &str) -> String {
+    let mut words = vec![cmd.get_program().to_string_lossy().into_owned()];
+    for arg in cmd.get_args() {
+        let arg = arg.to_string_lossy();
+        words.push(if arg == prompt {
+            "<prompt>".into()
+        } else {
+            arg.into_owned()
+        });
+    }
+    if stdin {
+        words.push(" (prompt on stdin)".into());
+    }
+    words.join(" ")
 }
 
 fn on_path(program: &str) -> bool {
@@ -518,11 +562,13 @@ fn extract_view(output: &str, today: &str) -> Option<String> {
 /// no output), so a missing view is reported with the harness's own last words.
 fn ask_for_view(
     harness: &Harness,
+    model: Option<&str>,
+    timeout: Duration,
     prompt: &str,
     root: &Path,
     today: &str,
 ) -> Result<String, String> {
-    let (mut cmd, stdin) = harness.command(prompt);
+    let (mut cmd, stdin) = harness.command(prompt, model)?;
     cmd.current_dir(root)
         .stdin(if stdin { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::piped())
@@ -530,31 +576,63 @@ fn ask_for_view(
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("cannot start harness: {e}"))?;
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
     if stdin {
         let mut pipe = child.stdin.take().expect("stdin is piped");
         pipe.write_all(prompt.as_bytes())
             .map_err(|e| format!("cannot send prompt to harness: {e}"))?;
     }
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("harness did not finish: {e}"))?;
-    let stderr = strip_ansi(&String::from_utf8_lossy(&output.stderr));
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(200)),
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!(
+                    "harness still running after {} minutes and was stopped; raise --timeout if that is expected",
+                    timeout.as_secs() / 60
+                ));
+            }
+            Err(e) => return Err(format!("harness did not finish: {e}")),
+        }
+    };
+    let stdout = stdout.join().unwrap_or_default();
+    let stderr = strip_ansi(&stderr.join().unwrap_or_default());
     let tail: Vec<&str> = stderr.lines().filter(|l| !l.trim().is_empty()).collect();
     let tail = tail[tail.len().saturating_sub(5)..].join(" | ");
-    if !output.status.success() {
-        return Err(format!("harness exited with {}: {tail}", output.status));
+    if !status.success() {
+        return Err(format!("harness exited with {status}: {tail}"));
     }
-    extract_view(&String::from_utf8_lossy(&output.stdout), today).ok_or_else(|| {
+    extract_view(&stdout, today).ok_or_else(|| {
         format!("harness reply had no {VIEW_OPEN} section, so the view was left unchanged; harness stderr: {tail}")
+    })
+}
+
+/// Reads a pipe to the end on its own thread, so a chatty harness cannot fill one pipe
+/// and block while we wait on the other.
+fn drain(pipe: Option<impl Read + Send + 'static>) -> std::thread::JoinHandle<String> {
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut bytes);
+        }
+        String::from_utf8_lossy(&bytes).into_owned()
     })
 }
 
 fn refresh(
     slugs: Vec<String>,
     harness: Option<String>,
+    model: Option<String>,
+    timeout: u64,
     root: Option<PathBuf>,
     dry_run: bool,
 ) -> Result<ExitCode, String> {
+    let model = model.as_deref();
+    let timeout = Duration::from_secs(timeout * 60);
     let root = find_root(root)?;
     let root = root.canonicalize().unwrap_or(root);
     let mut concerns = concerns(&root)?;
@@ -573,13 +651,16 @@ fn refresh(
         return Err("no concerns to refresh".into());
     }
     let harness = Harness::resolve(harness)?;
+    harness.command("", model)?;
     let today = jiff::Zoned::now().date().to_string();
 
     if dry_run {
+        let (cmd, stdin) = harness.command("<prompt>", model)?;
         println!(
-            "harness: {}\nworking directory: {}\n",
-            harness.describe(),
-            root.display()
+            "harness: {}\nworking directory: {}\ntimeout: {} minutes per concern\n",
+            describe(&cmd, stdin, "<prompt>"),
+            root.display(),
+            timeout.as_secs() / 60
         );
         for concern in &concerns {
             println!(
@@ -594,16 +675,12 @@ fn refresh(
     let mut failed = 0;
     for concern in &concerns {
         eprintln!("crosscut: refreshing {} ...", concern.slug);
-        let outcome = ask_for_view(
-            &harness,
-            &refresh_prompt(&root, concern, &today),
-            &root,
-            &today,
-        )
-        .and_then(|view| {
-            std::fs::write(&concern.path, concern.with_view(&view))
-                .map_err(|e| format!("cannot write {}: {e}", concern.path.display()))
-        });
+        let prompt = refresh_prompt(&root, concern, &today);
+        let outcome =
+            ask_for_view(&harness, model, timeout, &prompt, &root, &today).and_then(|view| {
+                std::fs::write(&concern.path, concern.with_view(&view))
+                    .map_err(|e| format!("cannot write {}: {e}", concern.path.display()))
+            });
         match outcome {
             Ok(()) => println!("{}: view updated", concern.slug),
             Err(message) => {

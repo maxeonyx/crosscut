@@ -47,7 +47,9 @@ notes, a reservoir specific to this place:
 - what the last few months of commits reveal.
 
 Ground every entry in something you observed. Keep going past the point of
-feeling done, and stop when new entries are duplicates.
+feeling done, and stop when new entries are duplicates. Include a condensed
+form of it in what you report at the end: a reservoir nobody sees tends not
+to get written.
 
 This is where the value comes from. Five generic entries means you have
 satisfied the instruction without doing the work.
@@ -82,6 +84,10 @@ Propose a small initial set of concerns: often two to five, and each should
 be one you expect to want to re-ask. Say what you would *not* persist, and
 why.
 
+If nobody is available to answer, for example in a headless or delegated
+run, establish only the set you would recommend. Keep it small, and put your
+questions in the final report instead of guessing the answers.
+
 ## 5. Establish what they choose
 
 For each chosen concern, follow [establish.md](establish.md). Create
@@ -102,6 +108,3 @@ End with:
 - what you could not see, and why.
 
 That last list is often the most valuable part.
-
-Anyone you delegate part of this to gets the doctrine from SKILL.md
-verbatim, including its requirement to carry it forward again.

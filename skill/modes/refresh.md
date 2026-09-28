@@ -42,9 +42,8 @@ has also succeeded, as long as it says clearly what is unknown and why.
 
 - **Refresh each concern independently.** One concern failing to run must not
   stop, or colour, the others.
-- **Delegating is fine.** Each delegated agent gets the doctrine from
-  SKILL.md verbatim, including its requirement to carry it forward, plus the
-  concern file.
+- **Delegating is fine.** See "Delegating" in SKILL.md, and hand each
+  agent the concern file.
 - **Afterwards, synthesize briefly, in chat or in the commit message:**
   - what changed;
   - what is newly worth attention;
@@ -54,10 +53,14 @@ The human decides what to do with any of it.
 
 ## Headless
 
-`crosscut refresh` runs this mode through an installed coding harness. It
-sends one concern at a time. It asks the agent for the new view only, and
-writes that into the file itself, so a headless agent never needs write
-access.
+`crosscut refresh` runs this mode through an installed coding harness, one
+concern at a time. It asks the agent for the new view only, and writes that
+into the file itself, so a headless agent never needs to edit anything.
+
+"Never needs to" is not "cannot". The agent gets a shell so that it can run
+"How to look" commands, and only Codex's read-only sandbox enforces the
+request not to change anything. Treat concern files like scripts: refresh
+only ones you trust.
 
 Its exit status is about whether the refresh *ran*. It says nothing about
 what the refresh found.

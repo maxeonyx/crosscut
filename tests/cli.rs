@@ -97,7 +97,7 @@ fn readme_template_carries_the_framing_and_the_requirement_to_carry_it() {
     let out = stdout(crosscut().args(["prompt", "setup"]));
     assert!(out.contains("not obligations"), "{out}");
     assert!(flat(&out)
-        .contains("must pass on the requirement to keep both the framing and this requirement"));
+        .contains("must also pass on the requirement to keep both the thinking and framing and this requirement"));
 }
 
 #[test]
@@ -294,4 +294,91 @@ fn dry_run_shows_the_command_and_prompt_without_running() {
     assert!(out.contains("===== prompt for recovery ====="), "{out}");
     assert!(out.contains("===== prompt for version ====="), "{out}");
     assert_eq!(read(eco.path(), "recovery"), RECOVERY);
+}
+
+#[test]
+fn a_hung_harness_is_stopped_at_the_timeout_and_the_file_kept() {
+    let eco = ecosystem();
+    let assert = crosscut()
+        .args([
+            "refresh",
+            "recovery",
+            "--timeout",
+            "0",
+            "--harness",
+            "sleep 30",
+        ])
+        .current_dir(eco.path())
+        .timeout(std::time::Duration::from_secs(10))
+        .assert()
+        .code(2);
+    let err = String::from_utf8(assert.get_output().stderr.clone()).unwrap();
+    assert!(err.contains("was stopped"), "{err}");
+    assert_eq!(read(eco.path(), "recovery"), RECOVERY);
+}
+
+#[test]
+fn a_view_heading_inside_a_code_fence_is_not_the_view() {
+    let eco = ecosystem();
+    let fenced =
+        format!("{VERSION}\n## How to look\n\n```markdown\n## Current view — example\n```\n");
+    fs::write(eco.path().join("crosscut/concerns/version.md"), &fenced).unwrap();
+    let out = stdout(crosscut().arg("list").current_dir(eco.path()));
+    assert!(out.contains("no view yet"), "{out}");
+    let harness = "cat >/dev/null; echo '<crosscut-view>'; echo real; echo '</crosscut-view>'";
+    crosscut()
+        .args(["refresh", "version", "--harness", harness])
+        .current_dir(eco.path())
+        .assert()
+        .success();
+    let text = read(eco.path(), "version");
+    assert!(
+        text.starts_with(fenced.trim_end()),
+        "fenced example was cut: {text}"
+    );
+    assert!(text.ends_with("real\n"), "{text}");
+}
+
+#[test]
+fn model_is_passed_to_known_harnesses_and_refused_for_custom_commands() {
+    let eco = ecosystem();
+    let out = stdout(
+        crosscut()
+            .args([
+                "refresh",
+                "--dry-run",
+                "--harness",
+                "claude",
+                "--model",
+                "haiku",
+            ])
+            .current_dir(eco.path()),
+    );
+    assert!(out.contains("--model haiku"), "{out}");
+    assert!(
+        out.contains("--setting-sources user"),
+        "target project settings would load: {out}"
+    );
+    assert!(
+        out.contains("--disallowedTools Edit,Write,NotebookEdit"),
+        "{out}"
+    );
+    let out = stdout(
+        crosscut()
+            .args([
+                "refresh",
+                "--dry-run",
+                "--harness",
+                "opencode",
+                "--model",
+                "x/y",
+            ])
+            .current_dir(eco.path()),
+    );
+    assert!(out.contains("opencode -m x/y run <prompt>"), "{out}");
+    crosscut()
+        .args(["refresh", "--harness", "cat", "--model", "haiku"])
+        .current_dir(eco.path())
+        .assert()
+        .code(2);
 }

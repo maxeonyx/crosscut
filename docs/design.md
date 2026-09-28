@@ -203,8 +203,11 @@ latest result.** Several requirements fall out of that one choice:
 
 Headless refresh never edits the question or context. The agent returns a
 new *Current view* and the CLI replaces only that section. Refreshing and
-reconsidering therefore stay separate acts, a cheap model cannot corrupt the
-intent, and the headless run needs no write permission.
+reconsidering therefore stay separate acts, and a cheap model cannot corrupt
+the intent. The headless agent never *needs* to write. Whether it *can*
+depends on the harness: Codex's read-only sandbox enforces it. Claude runs
+with Bash, the edit tools denied, and the target's project settings not
+loaded. Concern files are therefore trusted like scripts.
 
 ## Constraints extracted
 
