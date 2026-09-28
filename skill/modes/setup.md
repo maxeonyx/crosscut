@@ -1,131 +1,106 @@
 # Setup: "Use CrossCut here"
 
-You are bringing CrossCut to a project or ecosystem, which may be brand new,
-years old, or someone else's. The goal is a person who can see more than
-before, plus the smallest persistent set of concerns worth keeping. The goal
-is not a complete catalogue.
+You are bringing CrossCut to a project or an ecosystem of projects: new, old,
+or someone else's. The goal is a map. It should show which cross-cutting
+concerns matter here, how each project meets them, and above all where the
+gaps are. Keep the persistent set small enough to stay alive.
+
+This is not a bug hunt. You will trip over defects: mention them in one
+line and move on.
 
 ## 1. Find out what is actually there
 
-Read before you theorize:
-- the code and its layout;
-- the manifests and lockfiles;
-- CI and deploy configuration;
-- the agent guidance and the README;
-- recent history (`git log --stat` over the last few months shows where the
-  effort goes);
-- open issues and PRs, if they are cheap to reach.
+List the projects and write `crosscut/projects.md` (see
+[../concern-files.md](../concern-files.md)). For each project, work out:
+- what kind of thing it is: a CLI, a site, a service, a library, a
+  deployment of upstream software, or a scheduled job;
+- who uses it;
+- what state it holds;
+- how it ships.
 
-Then run things: the setup command, the tests, `--help`. What happens when
-you run it tells you more than reading about it.
+A project you cannot reach becomes a line saying so.
+
+Read the manifests, CI and deploy configuration, READMEs and agent guidance,
+and recent history. Run cheap commands that only look, such as `--help`,
+`--version` and a site's version file, because what actually happens
+matters.
 
 Running has side effects:
-- Test suites rewrite lockfiles and status files.
-- They leave sessions, containers and daemons behind.
-- They share state with the host: a tmux server, a local database, caches.
+- Test suites rewrite lockfiles and leave sessions and daemons behind.
+- They also share state with the host.
 
-Prefer commands that only look. Before running anything heavier, note
-`git status` in every repository it can touch, and afterwards put back
-anything you changed. Whatever it disturbed is worth reporting too.
+Before running anything heavier, note `git status` everywhere it could touch,
+and put back anything you change.
 
-Work out what the unit is:
-- one repository;
-- several;
-- a deployment of upstream software;
-- a machine;
-- durable data that outlives the code.
+If `crosscut/` already exists, read it, and treat it as evidence rather than
+authority. The same goes for any existing concern system, such as a
+standards suite, a checklist or a set of CI gates:
+- What each one looks at is usually a good concern.
+- The machinery around it is not the point. What it costs and what it shows
+  can themselves be a concern.
 
-For a wrapper over many projects, write or update `crosscut/projects.md` as
-you go. A project you cannot reach becomes a line saying so. It does not
-stop the work.
+## 2. Build the candidate map
 
-If `crosscut/` already exists, read it first, and treat the existing
-concerns as evidence rather than authority.
+1. **Start from [../catalogue.md](../catalogue.md).** For each seed, ask
+   whether any of its user stories touch these projects, and what it would
+   look like here.
+2. **Go well beyond the catalogue.** [../reservoirs.md](../reservoirs.md)
+   has people, moments and shapes that suggest concerns the catalogue does
+   not list. The strongest source is the ecosystem itself:
+   - **A capability one project has and its siblings lack.** One tool
+     auto-updates and the rest don't. One site publishes its version and the
+     others don't. Each of these is a concern waiting to be named.
+   - **The same thing done several ways** across projects.
+   - **Something every project needs and none does.**
+3. **Sketch a rough map per candidate:** each project as yes, partly,
+   missing, n/a, deferred or unknown, with a few words of how.
 
-The place may already have its own concern system: a standards suite, a
-review checklist, a dashboard, a set of CI gates. Treat that as evidence too:
-- Its good mechanisms can become rungs in "How to look".
-- What it cannot see tells you where to look.
-- The system itself can be the subject of a concern: what does it cost, and
-  what does it show?
+Write this candidate grid in your notes, and keep adding to it until new
+candidates are duplicates.
 
-## 2. Expand before narrowing
+## 3. Judge which concerns are worth keeping
 
-Read [../reservoirs.md](../reservoirs.md). Then write, in your working
-notes, a reservoir specific to this place:
-- who touches it, and at what moments;
-- what it is made of;
-- what it depends on;
-- what decays;
-- what would hurt to lose;
-- what is done by hand;
-- what repeats across siblings;
-- what the last few months of commits reveal.
+A concern is worth persisting when you expect to want its map again: when
+projects will be added, when things drift, or when a gap is worth watching
+even if nobody fills it yet.
 
-Ground every entry in something you observed. Keep going past the point of
-feeling done, and stop when new entries are duplicates. Include a condensed
-form of it in what you report at the end: a reservoir nobody sees tends not
-to get written.
-
-This is where the value comes from. Five generic entries means you have
-satisfied the instruction without doing the work.
-
-## 3. Judge applicability and importance
-
-For each candidate, ask:
-- Does it apply? Where?
-- What concrete consequence is at stake, and for whom?
-- How much does it matter, compared with the rest?
-- What would better look like here?
-- What do we know, and what is unknown?
-
-A prototype and a service holding customer data should not carry the same
-burden. For a young project, say which dimensions will start to matter and
-when ("once it stores user data, recovery becomes the main question"), and
-persist almost nothing yet.
-
-For a mature project, separate what is load-bearing from historical residue.
-Do not create a concern for every weakness you see.
+A capability that every project already meets structurally, and cannot
+regress, may need only one line in your report. A prototype and a service
+holding customer data carry different burdens, and the stories decide which
+applies where.
 
 ## 4. Talk to the human, briefly
 
-Bring your most surprising, concrete findings first. Ask only what software
-evidence cannot tell you:
-- Is this data precious?
-- Who actually depends on this?
-- Is this trade-off deliberate?
-- What are you optimizing for?
+Lead with the grid and its gaps:
+- the concerns nobody meets;
+- the capabilities one sibling has and the others lack;
+- the places where one shared change would fill several rows.
 
-Propose a small initial set of concerns: often two to five, and each should
-be one you expect to want to re-ask. Say what you would *not* persist, and
-why.
+Ask only what the software cannot tell you:
+- Who actually depends on this?
+- Would this data hurt to lose?
+- Is this gap deliberate?
+
+Propose the concerns to persist, often more than a handful, because each one
+is small. Say which candidates you would leave out, and why.
 
 If nobody is available to answer, for example in a headless or delegated
-run, establish only the set you would recommend. Keep it small, and put your
-questions in the final report instead of guessing the answers.
+run, establish the set you would recommend, and put your questions in your
+final report.
 
-## 5. Establish what they choose
+## 5. Establish them
 
 For each chosen concern, follow [establish.md](establish.md). Create
 `crosscut/README.md` from the template in
 [../concern-files.md](../concern-files.md).
 
-Optionally, add one line to the project's agent guidance so that ordinary
-sessions notice the concerns, for example: "Cross-cutting concerns worth
-keeping visible live in `crosscut/concerns/`; consider whether your change
-touches one." Add it only if the human wants the concerns to be ambient.
+Optionally, add one line to each project's agent guidance so that ordinary
+sessions notice the concerns. Do this only if the human wants that.
 
 ## 6. Leave a clear picture
 
 End with:
-- what you found;
-- what you persisted;
-- what you noticed but deliberately left alone;
-- what you could not see, and why.
-
-That last list is often the most valuable part.
-
-Some findings are one small, obvious fix with a lot of leverage, such as a
-command in the guidance that does damage. Just report those clearly, or fix
-them if that is in scope. A concern is for a question worth asking again,
-not for a single defect.
+- the grid (`crosscut map`, if the CLI is available);
+- its three or four most interesting gaps, and the lightest way to fill each;
+- what you persisted, and what you deliberately left out;
+- what you could not see.

@@ -1,69 +1,46 @@
 # Establish: make one concern persistent
 
-The human said something like "I care about knowing whether these deployments
-can be recovered." Your job is to understand the concern properly *before*
-adding anything.
+The human said something like "I care about knowing whether these can be
+recovered", or you proposed a concern and they agreed. Understand the concern
+properly before adding anything.
 
 ## Understand the concern
 
-- **What is the terminal concern?** Take "does an AGENTS.md exist?" It is
-  standing in for "can a fresh agent get productive quickly, without being
-  misled?" Keep going until you reach the consequence someone actually feels.
-- **Where does it apply, and how strongly?** Which projects, deployments,
-  accounts, or relationships?
-- **What would better look like here?** Name concrete outcomes, not
-  "follows best practices".
-- **What would make us stop caring?** That tells you when to delete the
-  concern later.
+- **Name the concern, not a mechanism.** "Version visibility", not "has a
+  version.json". The concern is the need, and the file is one way a site can
+  meet it.
+- **Write the user stories.** Who needs this, doing what? Give a concrete
+  example of it mattering. There is usually one story; add others when
+  different stakeholders need different things from it.
+- **Say what it looks like in each kind of project.** How does a CLI meet
+  it? A site? A library? A database? This is what lets one concern span a
+  varied ecosystem.
+- **Say what would make us stop caring.** That tells you when to delete it.
 
 ## Choose the mechanism: climb down the ladder
 
-1. **Can the source of the concern disappear?** Remove the state, the manual
-   step, or the workaround. If a redesign is the best answer, say so. Then
-   the concern's view becomes "worth redesigning away", with the proposal.
-2. **Can the good property be made structural?** Examples: generated
-   metadata, one blessed command, an ownership boundary, a type. Then the
-   view only confirms that the structure holds.
-3. **Does a mature tool already answer it?** Name its command in
-   "How to look". Do not wrap it in anything.
-4. **Would a small custom script give high signal at low maintenance?**
-   Build one only if it will still work after files move, rarely raises
-   false alarms, and does not miss the important cases. If you find yourself
-   writing regexes against today's directory layout, stop: an agent is
-   probably the smaller and more accurate mechanism.
+1. **Can the concern disappear?** For example, remove the state or the
+   manual step.
+2. **Can it become structural?** A shared release workflow that gives every
+   tool a version file fills a whole row of the map, and stays filled.
+3. **Does a mature tool already answer it?** Name the command.
+4. **Would a small custom script give high signal at low maintenance?** Keep
+   it in `concerns/<slug>/`. Regexes against today's layout are a sign that
+   an agent is the better mechanism.
 5. **What needs judgment?** Write that part of "How to look" as an excellent
-   prompt:
-   - what to read and what to run;
-   - what a fresh, capable engineer would ask;
-   - what counts as evidence;
-   - what the known blind spots are.
+   prompt.
 
-   If a cheap model could do it, say so.
+Most concerns are mixed: a few cheap facts per project, then judgment over
+them. Do not spend model calls on what `git`, `gh` or `curl` can report, and
+do not build machinery for what a model judges well.
 
-Most concerns end up mixed: a few deterministic facts gathered cheaply, then
-judgment over them. Do not spend model calls rediscovering what `git`, `gh`
-or a linter can report. Equally, do not spend engineering building machinery
-for what a model judges well.
-
-For every mechanism, think about:
-- signal against noise;
-- the false positives and false negatives that matter;
-- cost in time, tokens and API calls;
-- what it needs to run (tools, credentials, network);
-- how it fails partway;
-- whether someone could mistake "the mechanism ran" for "the project is
-  good".
-
-## Write it and look once
+## Write it and map it once
 
 Create `crosscut/concerns/<slug>.md` following
 [../concern-files.md](../concern-files.md). Then do the first refresh
 yourself, as in [refresh.md](refresh.md), so that the file ends with a real
-current view.
+map.
 
-The first view often shows that the concern was framed wrong. If so, fix the
-framing now. It is cheap now and expensive later.
-
-Adding a concern should touch that one file, plus a helper directory only
-when a script genuinely earns it. If it needs more than that, something is
-wrong with the representation. Tell the human.
+The first map often shows that the concern was framed wrong: too narrow, too
+broad, or tied to one mechanism. If so, fix the framing now. It is cheap now
+and expensive later.

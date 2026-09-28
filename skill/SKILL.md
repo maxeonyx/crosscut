@@ -1,6 +1,6 @@
 ---
 name: crosscut
-description: Widen what you notice about a software project or ecosystem. Surface the cross-cutting engineering concerns the direct path misses (recovery, deployability, version visibility, agent guidance, CI, authority boundaries, the same weakness in sibling projects, and many more), and keep the worthwhile ones visible over time as plain Markdown concern files. Use when asked to "use CrossCut", "what are we not thinking about?", to set up, establish, refresh or reconsider concerns, when a repo contains a crosscut/ directory, or when a fix looks like it may reveal a broader weakness.
+description: Map the cross-cutting engineering concerns of a project or an ecosystem of projects, and keep that map visible over time. A concern is something generally useful that has to be true for people's needs to be met, such as version visibility, auto-update, recoverable state, fast feedback, one-step releases, or a front door that explains the project. The map shows how each project meets it, differently or not at all. Use when asked to "use CrossCut", "what are we not thinking about?", to set up, establish, refresh or reconsider concerns, when a repo contains a crosscut/ directory, or when a fix hints that siblings lack the same property.
 ---
 
 # CrossCut
@@ -10,6 +10,28 @@ description: Widen what you notice about a software project or ecosystem. Surfac
 CrossCut exists to widen what an engineering agent notices about software:
 the dimensions that are easy to miss on the direct path from idea to working
 product.
+
+**A concern is a compressed, generally useful thing that has to be true for
+people's needs to be met, across many kinds of software.** User stories have
+concerns. A concern usually serves one user story, sometimes many, with
+different stakeholders, and each one comes with a concrete example of why it
+matters.
+
+A concern looks different in each project. Take version visibility, the need
+to know what is live:
+- for a CLI, it is `--version`;
+- for a site, a published version file;
+- for a database, the applied migration.
+
+The view of a concern is a **map**: how each project meets it, partly meets
+it, lacks it, or doesn't need it. It also shows what the map reveals across
+projects:
+- the capability one sibling has and the others lack;
+- the same thing solved five ways;
+- the thing nobody does.
+
+CrossCut is not a bug hunt. Agents already find defects when asked. Mention
+the ones you trip over in passing, but the product is the map of concerns.
 
 Its product is visibility and food for thought, never obligation. Every
 observation leaves the human free to act, defer, accept the trade-off,
@@ -32,11 +54,12 @@ Get each current view by the lightest strong mechanism:
    that as a proper mechanism, not a stopgap.
 
 Concerns and their mechanisms evolve, and may be deleted. Minimise total
-complexity, including CrossCut's own. CrossCut applies itself to itself.
-Agent ergonomics are product ergonomics.
+complexity, including CrossCut's own. Everything still present should have a
+discoverable reason to be there, and everything else belongs in git history.
+CrossCut applies itself to itself. Agent ergonomics are product ergonomics.
 
-CrossCut is not a standard, a gate, a scorecard or a checklist. A refresh
-that finds bad news has succeeded.
+CrossCut is not a standard, a gate, a scorecard or a checklist. The map has
+no score. A refresh that finds gaps has succeeded.
 
 **Anything that carries this doctrine forward must carry both the doctrine
 and this requirement to carry both forward again.** That includes a prompt, a
@@ -53,13 +76,14 @@ These are modes of thought, not a pipeline. Move between them freely.
 | "Use CrossCut here", or setting up a project or ecosystem | [modes/setup.md](modes/setup.md) |
 | "What are we not thinking about?" | [modes/discover.md](modes/discover.md) |
 | "I care about X", or making one concern persistent | [modes/establish.md](modes/establish.md) |
-| Updating the current view of known concerns | [modes/refresh.md](modes/refresh.md) |
+| Updating the maps of known concerns | [modes/refresh.md](modes/refresh.md) |
 | Questioning whether a concern or its mechanism should exist | [modes/reconsider.md](modes/reconsider.md) |
 | Just fixed or built something, and wondering what it reveals | [modes/generalize.md](modes/generalize.md) |
 
-- Setup and discovery need breadth. Read
-  [reservoirs.md](reservoirs.md) as well: its examples show the range
-  expected, and they are not a checklist.
+- Setup and discovery start from [catalogue.md](catalogue.md), which holds
+  seed concerns most software eventually meets, and from
+  [reservoirs.md](reservoirs.md), which holds the people, moments and shapes
+  that suggest more. Both lead by example, and neither is a checklist.
 - Before writing or changing a concern file, read
   [concern-files.md](concern-files.md).
 
@@ -71,11 +95,17 @@ holds them:
 - a wrapper repository over many projects;
 - the umbrella of a family of repositories.
 
-Each concern file is a question worth asking again, why it matters here, how
-to get a current view, and the latest dated view. The file is at once the
-definition, the refresh prompt, and the latest result, and git history holds
-the rest. `crosscut/README.md` explains the directory to anyone who finds it.
-An optional `crosscut/projects.md` lists the projects a wrapper looks at.
+Each concern file contains:
+- its name;
+- the user stories it serves;
+- how it tends to appear in different kinds of project;
+- how to look;
+- the latest dated map.
+
+The file is at once the definition, the refresh prompt, and the latest
+result, and git history holds the rest. `crosscut/projects.md` names the
+projects the maps cover. `crosscut/README.md` explains the directory to
+anyone who finds it.
 
 Target projects never need to know CrossCut exists.
 
@@ -89,10 +119,9 @@ Target projects never need to know CrossCut exists.
   - whether a trade-off was deliberate.
 - Do not ask what you can find out from the repository, by running something,
   or by research.
-- Lead with concrete, project-specific findings.
+- Lead with the map, and above all with its gaps: the concern nobody meets,
+  and the capability one project has that its siblings lack.
 - Propose concerns. Never impose them.
-- Some observations are worth one sentence in chat and nothing more. Make
-  that the common case.
 
 ## Delegating
 
@@ -107,9 +136,10 @@ If `crosscut` is on `PATH`:
 
 | Command | What it does |
 |---|---|
-| `crosscut list` | Shows concerns and the date of each view. |
+| `crosscut map` | Shows every concern against every project, as one grid. |
+| `crosscut list` | Shows each concern, the date of its map, and its headline. |
 | `crosscut prompt <mode>` | Prints the full prompt for a mode, for harnesses without skills. |
-| `crosscut refresh [slug...]` | Refreshes views headless through an installed coding harness. |
+| `crosscut refresh [slug...]` | Refreshes maps headless through an installed coding harness. |
 | `crosscut install-skill` | Installs this skill for Claude Code, Codex and OpenCode. |
 
 Nothing here requires the CLI. Everything it does, you can do with the files.

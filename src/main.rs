@@ -19,6 +19,7 @@ const SKILL_FILES: &[(&str, &str)] = &[
         "concern-files.md",
         include_str!("../skill/concern-files.md"),
     ),
+    ("catalogue.md", include_str!("../skill/catalogue.md")),
     ("reservoirs.md", include_str!("../skill/reservoirs.md")),
     ("modes/setup.md", include_str!("../skill/modes/setup.md")),
     (
@@ -97,7 +98,20 @@ enum Cmd {
         dirs: Vec<PathBuf>,
     },
 
-    /// List concerns and the date of each current view.
+    /// Show every concern against every project, as one grid.
+    #[command(
+        after_help = "Rows are concerns, columns are the projects in crosscut/projects.md, and each cell is\n\
+        the first word of that project's row in the concern's current map: yes, partly, missing,\n\
+        n/a, deferred or unknown. A blank cell means the map has no row for that project.\n\n\
+        Examples:\n  $ crosscut map\n  $ crosscut map --root ~/home-ecosystem"
+    )]
+    Map {
+        /// Directory containing crosscut/ (default: search upwards from here).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+
+    /// List concerns, the date of each map, and its headline.
     #[command(
         after_help = "Finds the nearest crosscut/concerns/ at or above the current directory.\n\n\
         Examples:\n  $ crosscut list\n  $ crosscut list --root ~/home-ecosystem"
@@ -160,6 +174,7 @@ fn main() -> ExitCode {
         }),
         Some(Cmd::InstallSkill { dirs }) => install_skill(dirs),
         Some(Cmd::List { root }) => list(root),
+        Some(Cmd::Map { root }) => map(root),
         Some(Cmd::Refresh {
             slugs,
             harness,
@@ -230,6 +245,7 @@ fn prompt(mode: &str) -> Result<String, String> {
     }
     let mut refs = vec![format!("modes/{mode}.md")];
     if matches!(mode, "setup" | "discover") {
+        refs.push("catalogue.md".into());
         refs.push("reservoirs.md".into());
     }
     if matches!(mode, "setup" | "establish" | "refresh" | "reconsider") {
@@ -399,6 +415,107 @@ fn list(root: Option<PathBuf>) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+const STATUSES: &[&str] = &["yes", "partly", "missing", "n/a", "deferred", "unknown"];
+
+impl Concern {
+    /// The rows of the first table in the current view whose first column is `project`:
+    /// (project, status word), with the status normalised to one of `STATUSES` or `?`.
+    fn map_rows(&self) -> Vec<(String, String)> {
+        let Some(start) = self.view_start() else {
+            return Vec::new();
+        };
+        let cells = |line: &str| -> Vec<String> {
+            line.trim()
+                .trim_matches('|')
+                .split('|')
+                .map(|cell| cell.trim().replace(['*', '`'], ""))
+                .collect()
+        };
+        let mut lines = self.text[start..].lines().map(str::trim);
+        let found = lines
+            .by_ref()
+            .any(|line| line.starts_with('|') && cells(line)[0].eq_ignore_ascii_case("project"));
+        if !found {
+            return Vec::new();
+        }
+        lines
+            .take_while(|line| line.starts_with('|'))
+            .map(cells)
+            .filter(|row| row.len() >= 2 && !row[0].chars().all(|c| c == '-' || c == ':'))
+            .map(|row| {
+                let first = row[1]
+                    .split(|c: char| c == ':' || c.is_whitespace())
+                    .next()
+                    .unwrap_or("")
+                    .to_lowercase();
+                let status = STATUSES.iter().find(|s| **s == first).map_or("?", |s| s);
+                (row[0].clone(), status.to_string())
+            })
+            .collect()
+    }
+}
+
+/// Project names from `crosscut/projects.md`, in order: list items that start with a bold name.
+fn project_names(root: &Path) -> Vec<String> {
+    std::fs::read_to_string(root.join("crosscut/projects.md"))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|line| line.trim_start().strip_prefix("- **")?.split_once("**"))
+        .map(|(name, _)| name.trim().to_string())
+        .collect()
+}
+
+fn map(root: Option<PathBuf>) -> Result<ExitCode, String> {
+    let root = find_root(root)?;
+    let concerns = concerns(&root)?;
+    let maps: Vec<(&Concern, Vec<(String, String)>)> =
+        concerns.iter().map(|c| (c, c.map_rows())).collect();
+    let mut projects = project_names(&root);
+    for (_, rows) in &maps {
+        for (project, _) in rows {
+            if !projects.contains(project) {
+                projects.push(project.clone());
+            }
+        }
+    }
+    if projects.is_empty() {
+        println!("no maps yet: give concerns a table headed `project` in their current view");
+        return Ok(ExitCode::SUCCESS);
+    }
+    let first = concerns
+        .iter()
+        .map(|c| c.slug.len())
+        .max()
+        .unwrap_or(0)
+        .max(7);
+    let widths: Vec<usize> = projects.iter().map(|p| p.len().max(8)).collect();
+    let mut header = format!("{:first$}  {:10}", "", "mapped");
+    for (project, width) in projects.iter().zip(&widths) {
+        header.push_str(&format!("  {project:width$}"));
+    }
+    println!("{}", header.trim_end());
+    for (concern, rows) in &maps {
+        let date = concern
+            .view_summary()
+            .map_or(String::new(), |(date, _)| date);
+        let date: String = date.chars().take(10).collect();
+        let mut line = format!("{:first$}  {:10}", concern.slug, date);
+        if rows.is_empty() {
+            line.push_str("  (no map)");
+        } else {
+            for (project, width) in projects.iter().zip(&widths) {
+                let status = rows
+                    .iter()
+                    .find(|(p, _)| p == project)
+                    .map_or("", |(_, s)| s);
+                line.push_str(&format!("  {status:width$}"));
+            }
+        }
+        println!("{}", line.trim_end());
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
 enum Harness {
     Claude,
     Codex,
@@ -542,8 +659,12 @@ fn refresh_prompt(root: &Path, concern: &Concern, today: &str) -> String {
          - Concern: `crosscut/concerns/{}.md` (its full text is below).\n\
          - Today: {today}.\n{projects}\n\
          Do not modify any files. Read, and run only commands that do not change state.\n\n\
-         Aim for a view of under 400 words: the conclusions and the evidence that carries \
-         them, not the investigation. Start with the one sentence most worth knowing now.\n\n\
+         The view is a map: a headline sentence, then a table whose first column is headed \
+         `project` with one row per project in `crosscut/projects.md` that the concern could \
+         touch, each second cell starting with yes, partly, missing, n/a, deferred or unknown \
+         and a colon, then a few bullets on what the map shows across projects and what \
+         changed. Aim for under 400 words: conclusions, not the investigation. This is not a \
+         bug hunt; defects you trip over get one line under \"Noticed along the way\".\n\n\
          When you are done, output the complete new section, starting with \
          `## Current view — {today}`, between `{VIEW_OPEN}` and `{VIEW_CLOSE}` on their own \
          lines. crosscut will replace the concern's current view with exactly that text, and \

@@ -112,6 +112,7 @@ fn install_skill_writes_every_file() {
     for file in [
         "SKILL.md",
         "concern-files.md",
+        "catalogue.md",
         "reservoirs.md",
         "modes/setup.md",
         "modes/generalize.md",
@@ -463,4 +464,70 @@ fn list_headlines_drop_markdown_emphasis() {
     fs::write(eco.path().join("crosscut/concerns/recovery.md"), text).unwrap();
     let out = stdout(crosscut().arg("list").current_dir(eco.path()));
     assert!(out.contains("2026-01-01: backups exist.\n"), "{out}");
+}
+
+#[test]
+fn map_shows_every_concern_against_every_project_in_projects_md_order() {
+    let eco = ecosystem();
+    fs::write(
+        eco.path().join("crosscut/projects.md"),
+        "# Projects\n\n- **zeta**: a CLI\n- **alpha**: a site, holds data\n",
+    )
+    .unwrap();
+    let staying_current = "# Staying current\n\n## Current view — 2026-09-28\n\nOnly zeta updates itself.\n\n\
+        | Project | Where it stands |\n|---|---|\n| **zeta** | yes: self-update on start |\n\
+        | alpha | Missing: nothing updates the deploy |\n| extra | n/a: archived |\n\n- Across projects: copy zeta's.\n";
+    fs::write(
+        eco.path().join("crosscut/concerns/staying-current.md"),
+        staying_current,
+    )
+    .unwrap();
+    let recovery = RECOVERY.replace(
+        "Unknown: backups were never checked.",
+        "Headline.\n\n| project | status |\n|---|---|\n| alpha | unknown: no access |\n| zeta | shrug |\n\n| other | table |\n|---|---|\n| zeta | yes |",
+    );
+    fs::write(eco.path().join("crosscut/concerns/recovery.md"), recovery).unwrap();
+
+    let out = stdout(crosscut().arg("map").current_dir(eco.path()));
+    let lines: Vec<&str> = out.lines().collect();
+    let header: Vec<&str> = lines[0].split_whitespace().collect();
+    assert_eq!(header, ["mapped", "zeta", "alpha", "extra"], "{out}");
+    let row = |slug: &str| -> Vec<&str> {
+        lines
+            .iter()
+            .find(|l| l.starts_with(slug))
+            .unwrap()
+            .split_whitespace()
+            .collect()
+    };
+    assert_eq!(
+        row("staying-current"),
+        ["staying-current", "2026-09-28", "yes", "missing", "n/a"],
+        "{out}"
+    );
+    assert_eq!(
+        row("recovery"),
+        ["recovery", "2026-01-01", "?", "unknown"],
+        "an unrecognised status shows as ?: {out}"
+    );
+    assert_eq!(row("version"), ["version", "(no", "map)"], "{out}");
+}
+
+#[test]
+fn setup_and_discover_prompts_start_from_the_catalogue_and_refresh_asks_for_a_map() {
+    for mode in ["setup", "discover"] {
+        let out = stdout(crosscut().args(["prompt", mode]));
+        assert!(out.contains("<!-- catalogue.md -->"), "{mode}");
+        assert!(flat(&out).contains("This is not a bug hunt"), "{mode}");
+    }
+    let eco = ecosystem();
+    let out = stdout(
+        crosscut()
+            .args(["refresh", "recovery", "--dry-run", "--harness", "cat"])
+            .current_dir(eco.path()),
+    );
+    assert!(
+        flat(&out).contains("a table whose first column is headed `project`"),
+        "{out}"
+    );
 }

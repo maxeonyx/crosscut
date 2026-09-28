@@ -1,9 +1,10 @@
 # Reservoirs
 
-These examples exist to knock you out of your ordinary distribution. They
-show the breadth expected, not a list to work through. Most of them will not
-apply to the project in front of you. The concerns that matter most there may
-look like none of them.
+These examples exist to knock you out of your ordinary distribution, so that
+you see concerns that neither [catalogue.md](catalogue.md) nor the obvious
+task would suggest. They show the breadth expected, not a list to work
+through. Most of them will not apply to the project in front of you. The
+concerns that matter most there may look like none of them.
 
 **How to use this file.** Read it, then put it aside and write your own
 reservoir for the actual project or ecosystem. Ground every entry in
@@ -74,47 +75,20 @@ Some examples of what each shape can turn up:
 - a desktop app with an auto-updater, where the update channel is the most
   powerful code path you ship.
 
-## Concern seeds
+## From a moment to a concern
 
-Write each concern as a question. Note where it bites, because that is how
-you judge whether it applies.
+Each of these moments suggests a concern, which is a property that would
+have made the moment fine, and a map row for every sibling project:
+- The tool that never updated. The concern is staying current. Which of the
+  others update themselves?
+- "Is the fix live?" The concern is version visibility. Which projects can
+  answer that in seconds?
+- The restore nobody has tried. The concern is recoverable state. Which
+  projects hold state, and which have a restore that has actually been done?
+- The fifth vertical that took a week. The concern is that the next one is
+  cheap. Where else does adding one mean touching twelve places?
 
-- **Can we get back the state we actually care about?** It bites when a
-  database, uploaded files, device pairings or config exist nowhere else.
-  Watch for restore credentials that live on the machine being restored.
-- **Can we tell what is running?** It bites when deploys are manual or
-  there is more than one environment.
-- **What happens on the second run, and on a half-finished run?** It bites
-  for migrations, sync tools, installers, and anything that writes files.
-- **Who can do what, and who decided?** It bites once there is more than one
-  user, more than one tenant, or a service account with broad scope.
-- **What decays with time alone?** Certificates, domains, tokens, pinned
-  toolchains, deprecated CI runtimes, abandoned dependencies, and model
-  deprecations.
-- **What does a fresh machine or a fresh agent need before anything
-  works?** Look for setup steps that live only in someone's shell history.
-- **Is feedback fast where people and agents actually iterate?** Watch for a
-  full suite being the only way to check a one-line change.
-- **Do the tests exercise the path that matters?** It bites where CI is
-  green while the release or deploy path is never run.
-- **Is the agent guidance true, useful and short?** Watch for stale
-  commands, history presented as architecture, and paragraphs that only
-  exist because setup is strange.
-- **Are siblings diverging for no reason, or coupled for no reason?** Look
-  for five auth helpers, or one shared library forcing lockstep releases.
-- **What is the blast radius of one account, one machine, or one key?**
-  Consider an ecosystem whose source, releases, sites and update channel all
-  sit behind one login.
-- **What can repository content make a tool-running agent do?** It bites
-  wherever agents run commands found in files they did not write.
-- **What is this costing?** CI minutes, API calls, model tokens, idle
-  servers.
-- **What is done by hand that the next person will not know to do?**
-  Release steps, cert renewal, key rotation.
-- **Where does time and place leak in?** Timezones, daylight saving, locale,
-  path separators, case-insensitive filesystems, line endings.
-- **Could this concern disappear?** Removing stored state, a deploy step or
-  a compatibility layer removes whole families of questions at once.
+The seed concerns themselves are in [catalogue.md](catalogue.md).
 
 ## The mechanism ladder, by example
 

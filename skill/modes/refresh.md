@@ -1,66 +1,49 @@
-# Refresh: update the current view
+# Refresh: update the map
 
-Refreshing means updating our understanding of a known concern. It does not
-mean judging the project.
-
-A refresh that finds eight of ten deployments cannot be recovered has
-succeeded: it learned something. A refresh that cannot get enough evidence
-has also succeeded, as long as it says clearly what is unknown and why.
+Refreshing means updating the map of a known concern. It does not mean
+judging the projects. A map that shows six of eight projects missing
+something has succeeded. So has one that could not see some projects, as
+long as those rows say `unknown` and why.
 
 ## For each concern
 
-1. Read the whole file.
-   - The question and "Why this matters here" tell you what to care about.
-   - "How to look" tells you how.
-   - The previous "Current view" is your baseline.
-
-   `git log -p -- <file>` shows how earlier views evolved, when that helps.
-2. Follow "How to look".
-   - Run the deterministic parts first. They are cheap and they ground the
-     judgment.
-   - Then do the judgment parts properly: read, run, try things, as a
-     capable engineer would.
-   - If a project is missing, or a credential or tool is unavailable, that
-     part becomes a stated unknown. Do not stop, and do not guess.
-3. Write a new `## Current view — <today>` section to replace the old one,
-   following [../concern-files.md](../concern-files.md):
-   - applicability and importance in context;
-   - evidence, with how confident you are in it;
-   - unknowns, and why each is unknown;
-   - what is worth considering;
-   - what changed since the last view;
-   - anything noticed along the way.
-4. Do not rewrite the question, "Why this matters here" or "How to look"
-   during a refresh.
-   - If "How to look" is stale (a command fails, a path moved, a better tool
-     now exists), say so in the view.
-   - If the whole concern looks wrong or obsolete, say that too.
-   - Changing the definition is [reconsider.md](reconsider.md), and in a
-     wrapper repository it is the human's call.
+1. **Read the whole file.**
+   - The user stories and "What it looks like here" say what to look for in
+     each kind of project.
+   - "How to look" says how.
+   - The previous map is your baseline.
+2. **Go project by project** through `crosscut/projects.md`.
+   - Run the cheap deterministic parts first.
+   - Then do the judgment parts properly.
+   - A project you cannot see is `unknown`, with the reason. Do not guess.
+3. **Write a new `## Current view — <today>`** following
+   [../concern-files.md](../concern-files.md):
+   - a headline;
+   - the map table;
+   - what the map shows across projects;
+   - what changed since the last map.
+4. **Do not rewrite the concern's definition during a refresh.** If "How to
+   look" is stale, or the concern looks wrongly framed, say so in the view.
+   Changing the definition is [reconsider.md](reconsider.md).
 
 ## Refreshing many concerns
 
-- **Refresh each concern independently.** One concern failing to run must not
-  stop, or colour, the others.
-- **Delegating is fine.** See "Delegating" in SKILL.md, and hand each
-  agent the concern file.
-- **Afterwards, synthesize briefly, in chat or in the commit message:**
-  - what changed;
-  - what is newly worth attention;
-  - anything noticed along the way that suggests a new concern.
+Refresh each concern independently: one that fails to run must not stop the
+others. If you delegate, see "Delegating" in SKILL.md, and hand each agent
+the concern file.
 
-The human decides what to do with any of it.
+Afterwards, `crosscut map` shows the grid. Summarize what changed in it.
 
 ## Headless
 
-`crosscut refresh` runs this mode through an installed coding harness, one
-agent per concern, six at a time by default (`--jobs`). It asks the agent for the new view only, and writes that
-into the file itself, so a headless agent never needs to edit anything.
+`crosscut refresh` runs this mode through an installed coding harness. It
+uses one agent per concern, six at a time by default (`--jobs`). It asks
+each agent for the new view only, and writes that into the file itself.
 
-"Never needs to" is not "cannot". The agent gets a shell so that it can run
-"How to look" commands, and only Codex's read-only sandbox enforces the
-request not to change anything. Treat concern files like scripts: refresh
-only ones you trust.
+"Never needs to write" is not "cannot write". The agent gets a shell so it
+can run "How to look" commands, and only Codex's read-only sandbox enforces
+the request not to change anything. Treat concern files like scripts:
+refresh only ones you trust.
 
-Its exit status is about whether the refresh *ran*. It says nothing about
-what the refresh found.
+The exit status is about whether the refresh *ran*. It says nothing about
+what the map shows.
