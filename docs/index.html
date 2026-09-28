@@ -38,8 +38,10 @@
     .dim { color: var(--muted); }
 
     /* The map. */
-    .map-wrap { margin: 2.2rem 0 0.6rem; overflow-x: auto; }
-    table.grid { border-collapse: separate; border-spacing: 0.35rem; font-size: 0.85rem; }
+    .map-wrap { margin: 2.2rem 0 0.6rem; overflow-x: auto; width: min(1080px, 100vw - 2rem); position: relative; left: 50%; transform: translateX(-50%); }
+    .notes { max-width: 696px; margin-left: auto; margin-right: auto; }
+    table.grid { border-collapse: separate; border-spacing: 0.35rem; font-size: 0.85rem; margin: 0 auto; }
+    .grid tbody th { position: sticky; left: 0; z-index: 1; background: var(--bg); white-space: normal; min-width: 9.5rem; max-width: 12rem; line-height: 1.25; font-family: "IBM Plex Sans", "Avenir Next", sans-serif; color: var(--fg); }
     .grid th { font-weight: 500; color: var(--muted); text-align: left; padding: 0 0.3rem; white-space: nowrap; transition: opacity .7s ease; }
     .grid td { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.55rem; white-space: nowrap;
                transition: opacity .7s ease, filter .7s ease, transform .7s ease; }
@@ -48,13 +50,21 @@
     .na { color: var(--muted); } .deferred { color: var(--decided); font-style: italic; }
     .grid td.asked { border-color: var(--yes); box-shadow: 0 0 0 2px color-mix(in srgb, var(--yes) 25%, transparent); }
     .narrow .grid td:not(.asked), .narrow .grid th:not(.asked) { opacity: 0; filter: blur(5px); transform: scale(.94); }
-    .notes { list-style: none; margin-top: 0.6rem; font-size: 0.9rem; transition: opacity .8s ease .9s; }
+    .notes { list-style: none; margin-top: 1rem; font-size: 0.9rem; transition: opacity .8s ease .9s; }
     .narrow .notes { opacity: 0; }
     .notes li { margin: 0.3rem 0; padding-left: 1.2rem; position: relative; }
     .notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
-    .controls { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: baseline; margin-top: 0.4rem; }
-    .caption { font-size: 0.9rem; color: var(--muted); }
-    button { font: inherit; font-weight: 600; color: var(--bg); background: var(--accent); border: 0; border-radius: 999px; padding: 0.45rem 1.1rem; cursor: pointer; }
+    .controls { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1rem; margin-top: 0.8rem; }
+    .caption { font-size: 1rem; color: var(--muted); }
+    button { font: inherit; font-size: 1.15rem; font-weight: 700; color: var(--bg); background: var(--accent); border: 0; border-radius: 999px;
+             padding: 0.8rem 1.8rem; cursor: pointer; box-shadow: 0 6px 20px -8px var(--accent); animation: nudge 2.4s ease-in-out infinite; }
+    button:hover { transform: translateY(-1px); }
+    @keyframes nudge { 0%, 100% { box-shadow: 0 6px 20px -8px var(--accent), 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+                       50% { box-shadow: 0 6px 20px -8px var(--accent), 0 0 0 10px transparent; } }
+    .gated #rest, .gated footer { display: none; }
+    #rest { animation: appear .8s ease both .5s; }
+    @keyframes appear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
     button:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
 
     /* The scorecard we will never ship. */
@@ -77,27 +87,32 @@
 <body>
   <div class="container">
     <h1>Cross<span class="x">Cut</span></h1>
-    <p class="tagline">Peripheral vision for coding agents.</p>
+    <p class="tagline">A seasoned engineer's breadth, raising the waterline across every project you've got.</p>
 
-    <div class="map-wrap" id="field">
-      <table class="grid" aria-label="Juniper's map: concerns by project">
-        <thead><tr><th></th><th>larder</th><th>ledger-web</th><th>nightly-sync</th><th class="asked">pantry</th></tr></thead>
+    <div id="field">
+      <div class="map-wrap" id="scroller">
+      <table class="grid" aria-label="An invented team's projects: concerns by project">
+        <thead><tr><th></th><th>auth-lib</th><th>data-cli</th><th>billing-api</th><th class="asked">ops-cli</th><th>billing-web</th><th>nightly-backup</th><th>photo-server</th></tr></thead>
         <tbody>
-          <tr><th>recoverable-state</th><td class="na">n/a</td><td class="na">n/a</td><td class="partly">partly</td><td class="na">n/a</td></tr>
-          <tr><th class="asked">staying-current</th><td class="missing">missing</td><td class="na">n/a</td><td class="na">n/a</td><td class="yes asked">yes</td></tr>
-          <tr><th>version-visibility</th><td class="missing">missing</td><td class="yes">yes</td><td class="deferred">deferred</td><td class="yes">yes</td></tr>
+          <tr><th>We can get the data back</th><td class="na">n/a</td><td class="na">n/a</td><td class="partly">partly</td><td class="na">n/a</td><td class="na">n/a</td><td class="na">n/a</td><td class="missing">missing</td></tr>
+          <tr><th class="asked">Installed copies update themselves</th><td class="na">n/a</td><td class="missing">missing</td><td class="na">n/a</td><td class="yes asked">yes</td><td class="na">n/a</td><td class="na">n/a</td><td class="missing">missing</td></tr>
+          <tr><th>We can tell which version is live</th><td class="yes">yes</td><td class="missing">missing</td><td class="missing">missing</td><td class="yes">yes</td><td class="yes">yes</td><td class="deferred">deferred</td><td class="partly">partly</td></tr>
         </tbody>
       </table>
+      </div>
       <ul class="notes">
-        <li><strong>larder</strong> is pantry's younger sibling. It never got self-update, and nobody asked.</li>
-        <li><strong>nightly-sync</strong> copies the ledger every night. Nobody has ever restored one.</li>
-        <li><strong>deferred</strong> is a person's decision (“it's being retired”), not a gap. No run overwrites it.</li>
+        <li><strong>data-cli</strong> is ops-cli's younger sibling. It got neither self-update nor <code>--version</code>, and nobody asked.</li>
+        <li><strong>photo-server</strong> holds every team photo. Nothing backs them up.</li>
+        <li><strong>billing-api</strong> holds customer invoices. Its only copy is overwritten every night.</li>
+        <li><strong>deferred</strong> is a decision, not a gap: the agent proposed it, the team lead confirmed it (“it's being retired”). No run overwrites it.</li>
       </ul>
     </div>
     <div class="controls">
-      <button id="widen" type="button" hidden>widen</button>
-      <span class="caption" id="caption">You asked your agent to give pantry self-update. It did.</span>
+      <span class="caption" id="caption">You asked your agent to give ops-cli self-update. It did.</span>
+      <button id="widen" type="button" hidden>Now look around →</button>
     </div>
+
+    <div id="rest">
 
     <h2>Why</h2>
     <p>Ask a coding agent to find bugs and it will find bugs. Nobody asks whether the CLI you wrote in March can update itself, whether the site says which version is live, or whether anyone has ever restored the backup. Those aren't bugs. They're <strong>concerns</strong>: things nearly every project eventually needs, which look different in each one. For a CLI it's <code>--version</code>, for a site a version file, for a database the migration it's at.</p>
@@ -123,18 +138,19 @@
 
     <h2>What it looks like</h2>
 <pre><code><span class="dim">$</span> crosscut check
-staying-current/larder: (none) → missing: Cargo.toml has no self-update mechanism
-staying-current/pantry: (none) → yes: uses the self_update crate
-version-visibility/ledger-web: (none) → yes: version.json names the commit
+staying-current/data-cli: (none) → missing: CLI has no self-updater; installed copies stay where they were installed
+staying-current/ops-cli: (none) → yes: CLI depends on self_update
+staying-current/photo-server: (none) → missing: docker-compose.yml pins images and nothing proposes upgrades
+version-visibility/billing-web: (none) → yes: site publishes version.json with a commit
 <span class="dim">…</span>
-8 cells checked: 8 changed, 0 could not run      <span class="dim"># no model involved</span>
+14 cells checked: 14 changed, 0 could not run      <span class="dim"># no model involved</span>
 
 <span class="dim">$</span> crosscut check --agentic recoverable-state      <span class="dim"># one agent per cell</span>
-recoverable-state/nightly-sync: (none) → partly: copies the export nightly, overwriting
-  the same file, with no restore runbook anywhere
+recoverable-state/photo-server: (none) → missing: holds photos (/srv/photos) and a catalogue
+  (vault-db volume) with no backup, no off-machine copy, and no sign of a restore
 
 <span class="dim">$</span> crosscut test
-8 fixture cells: 8 as expected, 0 not            <span class="dim"># the checks, checked</span>
+18 fixture cells: 18 as expected, 0 not            <span class="dim"># the checks, checked</span>
 
 <span class="dim">$</span> git diff crosscut/                             <span class="dim"># the history of the map</span></code></pre>
 
@@ -154,32 +170,33 @@ crosscut install-skill      <span class="dim"># Claude Code, Codex, OpenCode</sp
     <p>Then tell your agent <em>“Use CrossCut here.”</em> It maps what your projects have and lack, starting from about thirty seed concerns and the differences between siblings, and writes the cheapest check for each one.</p>
 
     <h2>The contagious paragraph</h2>
-    <p class="contagious">CrossCut widens what agents notice. It hands you visibility and food for thought, never obligations. Anything that passes CrossCut on, whether a prompt, a README, a delegated agent, a rewrite, or this website, must pass on the doctrine, together with the requirement to pass on both the doctrine and this requirement. Yes, including this sentence. <a href="https://github.com/maxeonyx/crosscut/blob/main/skill/SKILL.md">The full doctrine</a>.</p>
+    <p class="contagious">CrossCut maps what every project needs across all of yours. It hands you visibility and food for thought, never obligations. Anything that passes CrossCut on, whether a prompt, a README, a delegated agent, a rewrite, or this website, must pass on the doctrine, together with the requirement to pass on both the doctrine and this requirement. Yes, including this sentence. <a href="https://github.com/maxeonyx/crosscut/blob/main/skill/SKILL.md">The full doctrine</a>.</p>
+
+    </div>
 
     <footer>
-      <p>Juniper is made up. Your projects aren't.</p>
+      <p>These projects are made up. Yours aren't.</p>
       <a href="https://github.com/maxeonyx/crosscut">GitHub</a>
       <p>Part of <a href="https://tools.maxeonyx.com">maxeonyx agent-tools</a>: <a href="https://trunc.maxeonyx.com">trunc</a> | <a href="https://tmux-bridge.maxeonyx.com">tb</a> | <a href="https://dotsync.maxeonyx.com">dotsync</a> | <a href="https://tdd-ratchet.maxeonyx.com">tdd-ratchet</a> | <a href="https://crosscut.maxeonyx.com">crosscut</a></p>
     </footer>
   </div>
   <script>
-    // Start with what the agent saw: the one cell it was asked about.
+    // Start with what the agent saw: the one cell it was asked about. Everything else waits.
     const field = document.getElementById("field");
     const widen = document.getElementById("widen");
-    const caption = document.getElementById("caption");
-    const whole = "Juniper, an invented ecosystem, as CrossCut maps it.";
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      field.classList.add("narrow");
-      widen.hidden = false;
-      widen.addEventListener("click", () => {
-        field.classList.remove("narrow");
-        widen.textContent = "that's more like it";
-        widen.disabled = true;
-        caption.textContent = whole;
-      });
-    } else {
-      caption.textContent = whole;
-    }
+    document.body.classList.add("gated");
+    field.classList.add("narrow");
+    // Keep the one lit cell in the middle, even when the map is wider than the screen.
+    const scroller = document.getElementById("scroller");
+    const lit = scroller.querySelector("td.asked");
+    scroller.scrollLeft = lit.offsetLeft - (scroller.clientWidth - lit.offsetWidth) / 2;
+    widen.hidden = false;
+    widen.addEventListener("click", () => {
+      document.body.classList.remove("gated");
+      field.classList.remove("narrow");
+      widen.remove();
+      document.getElementById("caption").textContent = "An invented team's projects, as CrossCut maps them.";
+    });
   </script>
 </body>
 </html>

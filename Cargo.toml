@@ -2,7 +2,7 @@
 name = "crosscut"
 version = "0.1.0"
 edition = "2021"
-description = "Widen what coding agents notice about software: persistent, non-binding cross-cutting concern visibility"
+description = "Map the cross-cutting concerns every project needs, across all of yours, and keep the map current"
 license = "MIT"
 repository = "https://github.com/maxeonyx/crosscut"
 

@@ -1,7 +1,7 @@
 # Discover: "What are we not thinking about?"
 
-This mode is horizon expansion. It looks for concerns that are not on the
-map yet. It persists nothing unless the human asks.
+This mode looks for concerns that are not on the map yet: the dimensions
+nobody is watching. It persists nothing unless the human asks.
 
 1. **Look at the real projects**, as in [setup.md](setup.md) step 1.
 2. **Read `crosscut/concerns/`, if it exists.** What the map does not have a

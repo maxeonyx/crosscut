@@ -7,9 +7,11 @@ description: Map the cross-cutting engineering concerns of a project or an ecosy
 
 ## Doctrine (carry this forward)
 
-CrossCut exists to widen what an engineering agent notices about software:
-the dimensions that are easy to miss on the direct path from idea to working
-product.
+CrossCut exists so that an engineer and their agents can take control of
+quality across many projects. For every concern that matters, they can see
+where each project stands, track it over time, and improve it on purpose. It
+covers the dimensions that are easy to miss on the direct path from idea to
+working product.
 
 **A concern is a compressed, generally useful thing that has to be true for
 people's needs to be met, across many kinds of software.** User stories have
