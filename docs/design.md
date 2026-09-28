@@ -9,6 +9,12 @@ the design and rewrite this file.
 
 ## 1. What we are trying to make true
 
+**Why (Max, 2026-09-28):** every project needs to track many shared
+requirements. CrossCut gets your agent to advocate for them.
+
+This is the canonical why. The README, the site and the doctrine say it in
+their own form, but derive from it.
+
 > An engineer and their agents can take control of quality across many
 > projects and tools. For every aspect of quality that matters, they can see
 > where each project stands, track it over time, and improve it on purpose.
