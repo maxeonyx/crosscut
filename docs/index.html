@@ -44,23 +44,19 @@
     table.grid { border-collapse: separate; border-spacing: 0.35rem; font-size: 0.85rem; margin: 0 auto; }
     .grid tbody th { position: sticky; left: 0; z-index: 1; background: var(--bg); white-space: normal; min-width: 9.5rem; max-width: 12rem; line-height: 1.25; font-family: "IBM Plex Sans", "Avenir Next", sans-serif; color: var(--fg); }
     .grid th { font-weight: 500; color: var(--muted); text-align: left; padding: 0 0.3rem; white-space: nowrap; transition: opacity .7s ease; }
-    .grid td { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.55rem; white-space: nowrap;
-               transition: opacity .7s ease, filter .7s ease, transform .7s ease; }
+    .grid td { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.55rem; white-space: nowrap; }
     @media (max-width: 639px) { table.grid { font-size: 0.72rem; border-spacing: 0.2rem; } .grid td { padding: 0.3rem 0.35rem; } }
     .yes { color: var(--yes); } .partly { color: var(--partly); } .missing { color: var(--missing); font-weight: 600; }
     .na { color: var(--muted); } .deferred { color: var(--decided); font-style: italic; }
     .grid td.asked { border-color: var(--yes); box-shadow: 0 0 0 2px color-mix(in srgb, var(--yes) 25%, transparent); }
-    .single { display: grid; grid-template-columns: auto auto; grid-template-areas: ". col" "row cell"; gap: 0.35rem 0.8rem;
-              justify-content: center; align-items: center; margin: 3.5rem 0 2.5rem; font-size: 1.05rem; }
-    .single .col { grid-area: col; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--muted); font-size: 0.9rem; }
-    .single .row { grid-area: row; text-align: right; max-width: 14rem; line-height: 1.3; }
-    .single .cell { grid-area: cell; font-family: "IBM Plex Mono", ui-monospace, monospace; background: var(--bg-elev); border: 1px solid var(--yes);
-                    border-radius: 6px; padding: 0.45rem 0.9rem; box-shadow: 0 0 0 3px color-mix(in srgb, var(--yes) 25%, transparent); }
-    .gated #field { display: none; }
-    #field { animation: appear .8s ease both; }
+    /* The seed: before the click, the grid is only the one lit cell and its two labels. */
+    .seed .grid tbody tr:not(.asked), .seed .grid th:not(.asked):not(.corner), .seed .grid td:not(.asked) { display: none; }
+    .seed .notes { display: none; }
+    .grid .grow { animation: grow .55s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes grow { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+    .notes.grow { animation: appear .7s ease both; }
     .notes { list-style: none; margin-top: 1rem; font-size: 0.9rem; transition: opacity .8s ease .9s; }
     .notes li { margin: 0.3rem 0; padding-left: 1.2rem; position: relative; }
-    .notes li.dim::before { content: ""; }
     .notes li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
     .controls { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1rem; margin-top: 0.8rem; }
     button { font: inherit; font-size: 1.15rem; font-weight: 700; color: var(--bg); background: var(--accent); border: 0; border-radius: 999px;
@@ -69,7 +65,7 @@
     @keyframes nudge { 0%, 100% { box-shadow: 0 6px 20px -8px var(--accent), 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
                        50% { box-shadow: 0 6px 20px -8px var(--accent), 0 0 0 10px transparent; } }
     .gated #rest, .gated footer { display: none; }
-    #rest { animation: appear .8s ease both .5s; }
+    #rest { animation: appear .8s ease both 1.5s; }
     @keyframes appear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
     button:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
@@ -98,19 +94,13 @@
       <p class="tagline">Raise the waterline across your breadth of projects, like a well-seasoned engineer.</p>
     </header>
 
-    <div class="single" id="single" hidden aria-hidden="true">
-      <span class="col">ops-cli</span>
-      <span class="row">Installed copies update themselves</span>
-      <span class="cell yes">yes</span>
-    </div>
-
     <div id="field">
       <div class="map-wrap" id="scroller">
       <table class="grid" aria-label="An invented team's projects: concerns by project">
-        <thead><tr><th></th><th>auth-lib</th><th>data-cli</th><th>billing-api</th><th class="asked">ops-cli</th><th>billing-web</th><th>nightly-backup</th><th>photo-server</th></tr></thead>
+        <thead><tr><th class="corner"></th><th>auth-lib</th><th>data-cli</th><th>billing-api</th><th class="asked">ops-cli</th><th>billing-web</th><th>nightly-backup</th><th>photo-server</th></tr></thead>
         <tbody>
           <tr><th>We can get the data back</th><td class="na">n/a</td><td class="na">n/a</td><td class="partly">partly</td><td class="na">n/a</td><td class="na">n/a</td><td class="na">n/a</td><td class="missing">missing</td></tr>
-          <tr><th class="asked">Installed copies update themselves</th><td class="na">n/a</td><td class="missing">missing</td><td class="na">n/a</td><td class="yes asked">yes</td><td class="na">n/a</td><td class="na">n/a</td><td class="missing">missing</td></tr>
+          <tr class="asked"><th class="asked">Installed copies update themselves</th><td class="na">n/a</td><td class="missing">missing</td><td class="na">n/a</td><td class="yes asked">yes</td><td class="na">n/a</td><td class="na">n/a</td><td class="missing">missing</td></tr>
           <tr><th>We can tell which version is live</th><td class="yes">yes</td><td class="missing">missing</td><td class="missing">missing</td><td class="yes">yes</td><td class="yes">yes</td><td class="deferred">deferred</td><td class="partly">partly</td></tr>
         </tbody>
       </table>
@@ -120,7 +110,6 @@
         <li><strong>photo-server</strong> holds every team photo. Nothing backs them up.</li>
         <li><strong>billing-api</strong> holds customer invoices. Its only copy is overwritten every night.</li>
         <li><strong>deferred</strong> is a decision, not a gap: the agent proposed it, the team lead confirmed it (“it's being retired”). No run overwrites it.</li>
-        <li class="dim">An invented team's projects. Yours will look different.</li>
       </ul>
     </div>
     <div class="controls">
@@ -190,22 +179,51 @@ crosscut install-skill      <span class="dim"># Claude Code, Codex, OpenCode</sp
     </div>
 
     <footer>
-      <p>These projects are made up. Yours aren't.</p>
       <a href="https://github.com/maxeonyx/crosscut">GitHub</a>
       <p>Part of <a href="https://tools.maxeonyx.com">maxeonyx agent-tools</a>: <a href="https://trunc.maxeonyx.com">trunc</a> | <a href="https://tmux-bridge.maxeonyx.com">tb</a> | <a href="https://dotsync.maxeonyx.com">dotsync</a> | <a href="https://tdd-ratchet.maxeonyx.com">tdd-ratchet</a> | <a href="https://crosscut.maxeonyx.com">crosscut</a></p>
     </footer>
   </div>
   <script>
-    // Start with what the agent saw: one cell. Everything else waits behind the button.
-    const single = document.getElementById("single");
+    // Before the click, the grid is one cell: what the agent was asked about. On click the grid
+    // grows out of it: the table glides so that cell lands in its real place, and the other cells
+    // appear in order of their distance from it.
+    const field = document.getElementById("field");
+    const scroller = document.getElementById("scroller");
+    const table = scroller.querySelector("table");
+    const seed = table.querySelector("td.asked");
     const widen = document.getElementById("widen");
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     document.body.classList.add("gated");
-    single.hidden = false;
+    field.classList.add("seed");
     widen.hidden = false;
     widen.addEventListener("click", () => {
-      single.remove();
+      // The seed cell and its two labels glide from where they were to where they now belong.
+      const moving = [seed, table.querySelector("thead th.asked"), table.querySelector("tbody th.asked")];
+      const before = moving.map((el) => el.getBoundingClientRect());
+      field.classList.remove("seed");
+      scroller.scrollLeft = seed.offsetLeft - (scroller.clientWidth - seed.offsetWidth) / 2;
       widen.remove();
       document.body.classList.remove("gated");
+      if (still) return;
+      moving.forEach((el, i) => {
+        const after = el.getBoundingClientRect();
+        el.style.transform = `translate(${before[i].left - after.left}px, ${before[i].top - after.top}px)`;
+      });
+      table.getBoundingClientRect();
+      moving.forEach((el) => {
+        el.style.transition = "transform .8s cubic-bezier(.2,.7,.2,1)";
+        el.style.transform = "";
+      });
+      const rows = [...table.rows];
+      const seedRow = rows.indexOf(seed.parentElement), seedCol = seed.cellIndex;
+      rows.forEach((row, r) => [...row.cells].forEach((cell, c) => {
+        if (cell === seed || cell.classList.contains("asked")) return;
+        cell.style.animationDelay = `${250 + 90 * (Math.abs(r - seedRow) + Math.abs(c - seedCol))}ms`;
+        cell.classList.add("grow");
+      }));
+      const notes = field.querySelector(".notes");
+      notes.style.animationDelay = "1.1s";
+      notes.classList.add("grow");
     });
   </script>
 </body>
