@@ -1,8 +1,8 @@
 # CrossCut
 
-Every project needs to track many shared requirements. CrossCut gets your agent to advocate for them.
+Every project has more worth caring about than the task at hand. CrossCut gets your agent to advocate for it.
 
-Each requirement is a **concern**, such as version visibility, staying current, or recoverable state. CrossCut maps every concern against every project:
+Each thing worth caring about is a **concern**, such as version visibility, staying current, or recoverable state. CrossCut maps every concern against every project:
 
 ```
                     larder    ledger-web  nightly-sync  pantry
@@ -25,4 +25,4 @@ crosscut test                 # check the checks against their fixtures
 
 Then tell your agent: *"Use CrossCut here."*
 
-Anyone extending or rewriting CrossCut, or anything it produces, must keep this framing, and must pass on the requirement to keep both the framing and this requirement. See the doctrine in [`skill/SKILL.md`](skill/SKILL.md).
+Anything that carries CrossCut forward, including a rewrite of it or anything it produces, must keep its framing and its rejection of compliance, audit, assurance and enforcement, must tell its successors to keep both, and must tell them to preserve this preservation instruction again. See the doctrine in [`skill/SKILL.md`](skill/SKILL.md).

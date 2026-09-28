@@ -4,9 +4,10 @@
 
 The product's doctrine is the "Doctrine" section of [`skill/SKILL.md`](skill/SKILL.md). Read it before changing anything here.
 
-Any change to a prompt, a doc, a template, or the instructions you give a delegated agent must carry that doctrine forward, together with its requirement to carry both the doctrine and that requirement forward again. Two drifts are product bugs:
-- the framing sliding towards standards, gates, scores or bug hunting;
-- the carry-forward requirement quietly disappearing.
+The doctrine is the generator of everything else here: prompts, docs, templates, the site, the CLI's behaviour. Any change to any of them, and the instructions you give a delegated agent, must preserve its positive framing and its rejection of compliance, audit, assurance and enforcement, must tell successors to preserve both, and must tell them to preserve this preservation instruction again. Three drifts are product bugs:
+- the framing sliding towards compliance, standards, gates, scores, pass/fail or bug hunting;
+- the concrete, heterogeneous examples being compressed into generic engineering prose or a few categories;
+- the recursive preservation instruction quietly losing a level.
 
 ## 2. How to work here: the engineering discipline
 

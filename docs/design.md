@@ -9,8 +9,8 @@ the design and rewrite this file.
 
 ## 1. What we are trying to make true
 
-**Why (Max, 2026-09-28):** every project needs to track many shared
-requirements. CrossCut gets your agent to advocate for them.
+**Why:** every project has more worth caring about than the task at hand.
+CrossCut gets your agent to advocate for it.
 
 This is the canonical why. The README, the site and the doctrine say it in
 their own form, but derive from it.

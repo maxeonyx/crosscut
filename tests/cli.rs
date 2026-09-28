@@ -7,8 +7,7 @@ use std::time::{Duration, Instant};
 
 use assert_cmd::Command;
 
-const CARRY_FORWARD: &str =
-    "must carry both the doctrine and this requirement to carry both forward again";
+const CARRY_FORWARD: &str = "and the instruction to preserve this preservation instruction again";
 
 /// Collapse whitespace so prose checks do not depend on line wrapping.
 fn flat(text: &str) -> String {
@@ -200,15 +199,19 @@ fn install_skill_writes_every_file() {
 }
 
 #[test]
-fn readme_site_and_directory_template_carry_the_requirement_to_carry_the_doctrine() {
+fn readme_site_and_directory_template_carry_the_framing_and_its_preservation() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let readme = flat(&fs::read_to_string(root.join("README.md")).unwrap());
-    assert!(readme
-        .contains("must pass on the requirement to keep both the framing and this requirement"));
-    let site = flat(&fs::read_to_string(root.join("docs/index.html")).unwrap());
-    assert!(site.contains("the requirement to pass on both the doctrine and this requirement"));
-    let template = flat(&fs::read_to_string(root.join("skill/concern-files.md")).unwrap());
-    assert!(template.contains("must also pass on the requirement to keep both the thinking and framing and this requirement"));
+    for file in ["README.md", "docs/index.html", "skill/concern-files.md"] {
+        let text = flat(&fs::read_to_string(root.join(file)).unwrap());
+        assert!(
+            text.contains("rejection of compliance, audit, assurance and enforcement"),
+            "{file} lost the anti-framing"
+        );
+        assert!(
+            text.contains("to preserve this preservation instruction again"),
+            "{file} lost the instruction to preserve the preservation instruction"
+        );
+    }
 }
 
 // --- check: observations ---------------------------------------------------------------
