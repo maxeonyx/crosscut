@@ -45,6 +45,9 @@ generic categories. Do the intellectual legwork of thinking very broadly about
 what might matter, then make that landscape visible so the human and future
 agents can decide what deserves attention.
 
+The question CrossCut answers for a person and their projects is: **"What are
+we not thinking about?"**
+
 The value arrives at the end: essential complexity that is actually managed.
 Seeing the landscape is how senior engineers and their agents get there, one
 chosen concern at a time.
@@ -191,8 +194,16 @@ it, say what it would cost, and lead with leverage.
 
 ### Discovering concerns: go on and on
 
-Discovery is ephemeral. It can, and should, be regenerated at any time by
-prompting an agent again. So it never needs to be cautious or economical.
+Concerns are real. There is a common landscape of them out in the world,
+shared by most software, and many of them could simply never be automated
+before agents. CrossCut lists that landscape out, as a library, so that agents
+do not have to rediscover it, above all the concerns that are unintuitive.
+Discovery finds which of them apply here, the concrete instances in this
+person's software, and whatever the library does not hold yet.
+
+A landscape for one person's projects is ephemeral. It can, and should, be
+regenerated at any time by prompting an agent again. So it never needs to be
+cautious or economical.
 
 CrossCut is about diversity of aspect, diversity of concern, applied. Do not
 narrow the landscape. Do not save tokens by surfacing only the five most
