@@ -196,10 +196,23 @@ it, say what it would cost, and lead with leverage.
 
 Concerns are real. There is a common landscape of them out in the world,
 shared by most software, and many of them could simply never be automated
-before agents. CrossCut lists that landscape out, as a library, so that agents
-do not have to rediscover it, above all the concerns that are unintuitive.
-Discovery finds which of them apply here, the concrete instances in this
-person's software, and whatever the library does not hold yet.
+before agents. CrossCut writes down a **seed set** from that landscape, to lead
+by example and to spare agents rediscovering the unintuitive concerns.
+
+The seed set is nothing like a checklist:
+- **It is unbounded and never exhaustive.** Most of what matters for a given
+  person may not be in it.
+- **It is deliberately diverse.** It spans kinds of software, people, moments
+  and relationships, to show the full scope of what a concern can be.
+- **It must not be over-applied.** A seed belongs in a landscape only when this
+  software gives it a real story, a generic concern and a concrete instance.
+  A seed that does not fit is left out, not stretched to fit, and never padded
+  in as "not applicable". A landscape that mostly restates the seed set has
+  failed. So has one that forces a seed's shape onto a kind of software it does
+  not suit. Most of a good landscape comes from the software in front of you.
+
+Discovery finds which concerns apply here, the concrete instances in this
+person's software, and above all the ones no seed anticipated.
 
 A landscape for one person's projects is ephemeral. It can, and should, be
 regenerated at any time by prompting an agent again. So it never needs to be
