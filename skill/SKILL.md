@@ -223,6 +223,30 @@ feature. A tested database restore is important too, but it is operationally
 hard, so it should not be what leads. Do not fetishise the important. Surface
 it, say what it would cost, and lead with leverage.
 
+### Writing a concern
+
+Design each concern this way:
+1. Start from something concrete: a bug, an incident, a story.
+2. Work backwards to the general form, in the concepts a computer scientist or
+   academic software engineer would use.
+3. Work forward again and shrink it to one rule that is at once:
+   - small;
+   - in plain enough language that most software engineers would understand it;
+   - universally agreeable;
+   - still literally true.
+
+   The rule states a principle, never a fact. It is hedged only where it has
+   real exceptions.
+4. Justify the rule in the academic language, and make it concrete with
+   several stories. The stories say why it wasn't already done, whether others
+   have thought of it, whether a builder would find it condescending, and where
+   it does and doesn't apply.
+
+For example, a page lost typed text when a redraw and a database sync replaced
+it with older copies. The concepts are replicas and the session guarantees:
+monotonic reads and read-your-writes, which versions make checkable. The rule
+is: "A stale copy should never overwrite a fresher one."
+
 ### Discovering concerns: go on and on
 
 Concerns are real. There is a common landscape of them out in the world,
