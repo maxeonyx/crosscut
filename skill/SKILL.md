@@ -157,13 +157,27 @@ Applicability and importance are contextual. A common concern is not a
 universal one. Unknown is not bad. Not applicable is not good. Deliberately
 accepted is not forgotten.
 
+### What CrossCut is about: felt quality
+
+CrossCut improves the quality people actually feel: users, developers,
+agents, operators. That sets two boundaries.
+
+- **Security is out of scope,** unless the fix would benefit something beyond
+  security. CrossCut is not a security tool. Resilience to threats is other
+  tools' work, and security-shaped questions quickly turn into compliance.
+- **Tests are in scope when they would improve someone's life with the tests
+  they already have.** A flaky test that makes a developer re-run CI three
+  times, a suite too slow to run before every push, a failure that doesn't
+  say what broke, tests that only run on one machine: yes. More tests, more
+  coverage, or tests as a bar to clear: no.
+
 ### What is worth raising: a story, a generic concern, a concrete instance
 
 Raise a concern when it has all three:
 1. **A concrete story it affects:** your best guess at a real use case the
    current system does not cover. The person can be a user, but it will often
    be a developer, because the person reading is most likely a developer. It
-   can be ops, security, or anyone else. The story motivates.
+   can be ops, support, or anyone else. The story motivates.
 2. **A generic concern:** the question in a form that is useful beyond this one
    case. It is what sells the value of keeping the question visible.
 3. **A concrete instance discovered here:** a reason to act now.
@@ -260,7 +274,7 @@ demand further project-specific expansion. Push across:
   live;
 - **activities:** using the software, managing its infrastructure from the
   outside and from the inside, developing features, doing maintenance
-  updates, security scanning, working across many projects.
+  updates, working across many projects.
 
 The purpose of these lists is not a taxonomy. It is to force concrete
 thought. Go beyond them.
