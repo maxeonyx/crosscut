@@ -169,7 +169,7 @@ agents, operators. That sets two boundaries.
   that would improve someone's life with the tests they already have, by
   preventing a whole class of pain. CrossCut does not find flaky tests. It
   raises the rule that would have prevented them, such as "tests hold no
-  fixed shared resources: no fixed ports, database names or temp paths".
+  exclusive fixed resources": no fixed ports, database names or temp paths.
   More tests, more coverage, or tests as a bar to clear are out of scope.
 
 ### What is worth raising: a story, a generic concern, a concrete instance
