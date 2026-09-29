@@ -190,12 +190,28 @@ bug. Instead:
 - the generic concern: can a long-running client tell that it is out of date?
 - the instance: `berth-desk` cannot, and neither can the kiosk app.
 
-A concern should generalise. It is most valuable when it matters for several
-projects now, and still valuable when it will obviously matter for the next
-project. The best discoveries span projects: two apps computing tide windows
-with diverging versions of one library is something no single-repository
-review finds. Something valuable for only one project is worth mentioning,
-and CrossCut should mention it, but it is not a concern in this sense.
+A concern should generalise: it should obviously be valuable to other
+projects, not only this one. Judge that across software in general, not by how
+many of this person's projects show an instance today. A rule of thumb found
+in one project is still a concern if the next project will want it too. The
+best discoveries span projects: two apps computing tide windows with diverging
+versions of one library is something no single-repository review finds. A
+finding that only this one project could ever care about is worth a mention,
+but it is not a concern in this sense.
+
+**Aim for genuinely novel ideas, high-leverage tweaks, and valuable general
+principles.** Two filters come first:
+- **Between nothing and barely working, anyone does it.** If leaving a concern
+  unmanaged would leave things obviously broken, the ordinary path already
+  handles it, and it is not CrossCut's job to raise it.
+- **Common practice, told to an expert, is a lecture they have already had.**
+  Raising it is condescending. Judge this by the reader: a relatively
+  non-technical person who is keen to learn about cross-cutting concerns may
+  want exactly these, each with its story.
+
+What remains is the target: the idea a strong engineer is glad to hear, the
+small change that pays everywhere, and the rule of thumb that prevents a whole
+class of pain.
 
 **Rank by leverage, not by importance alone.** The highest-value item is not
 the most important one if it is expensive to act on. CrossCut's sweet spot is
