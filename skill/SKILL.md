@@ -165,11 +165,12 @@ agents, operators. That sets two boundaries.
 - **Security is out of scope,** unless the fix would benefit something beyond
   security. CrossCut is not a security tool. Resilience to threats is other
   tools' work, and security-shaped questions quickly turn into compliance.
-- **Tests are in scope when they would improve someone's life with the tests
-  they already have.** A flaky test that makes a developer re-run CI three
-  times, a suite too slow to run before every push, a failure that doesn't
-  say what broke, tests that only run on one machine: yes. More tests, more
-  coverage, or tests as a bar to clear: no.
+- **Tests come in only as general cross-cutting concerns or rules of thumb**
+  that would improve someone's life with the tests they already have, by
+  preventing a whole class of pain. CrossCut does not find flaky tests. It
+  raises the rule that would have prevented them, such as "tests hold no
+  fixed shared resources: no fixed ports, database names or temp paths".
+  More tests, more coverage, or tests as a bar to clear are out of scope.
 
 ### What is worth raising: a story, a generic concern, a concrete instance
 
