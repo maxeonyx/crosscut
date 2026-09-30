@@ -457,6 +457,14 @@ tell its reader to preserve that framing, and this preservation instruction,
 again, has already degraded. **Loss of this recursive framing is itself a
 CrossCut design bug.**
 
+Instructions that one agent writes for another (a skill, a prompt, a delegated
+task, generated guidance) must be **stronger than the human's own
+instructions**, because they carry lower authority than a real user message. A
+rule the human stated once, gently, has to be stated firmly and explicitly
+when it is handed on, or it weakens at every hop, and eventually the next agent
+in the chain no longer follows it. This applies to the preservation
+instruction above, and to this instruction too.
+
 ## What to do
 
 Decide which situation you are in, then read the matching file before acting.
