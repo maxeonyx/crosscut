@@ -176,13 +176,18 @@ pub fn pull_in(workspace: &Path, repos: &[(String, String)]) -> Result<Vec<PathB
             if !Path::new(source).exists() {
                 git.arg("--filter=blob:none");
             }
-            let status = git
+            // The checkout's lazy fetch prints progress despite --quiet, so git's output is
+            // kept back unless the clone fails.
+            let out = git
                 .arg(source)
                 .arg(&dir)
-                .status()
+                .output()
                 .map_err(|e| format!("cannot run git: {e}"))?;
-            if !status.success() {
-                return Err(format!("could not clone {name} from {source}"));
+            if !out.status.success() {
+                return Err(format!(
+                    "could not clone {name} from {source}: {}",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ));
             }
         }
         dirs.push(dir);
