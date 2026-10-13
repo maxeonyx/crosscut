@@ -42,7 +42,7 @@ Drop a candidate when any of these is true:
 - **It is a lecture.** Common practice told to an expert. Judge this by the reader.
 - **It is a bug or a gotcha.** This is not a bug hunt: a defect is not a concern. Neither is a platform trap any agent could find without taste.
 - **It is about change** (migrations, API changes, renames). A change is not a property of the code.
-- **It is compliance, security or obligation** ("is there a linter", "does every PR get two approvals"). That includes security-flavoured hygiene that buys the actual users nothing: separating development and production installs of an app with one user is not worth a card.
+- **It is compliance, security or obligation** ("is there a linter", "does every PR get two approvals"). That includes security-flavoured hygiene that buys the stakeholders nothing. Stakeholders are the people who use the software and the developers and coding agents who work on it. Separating development and production installs of an app with one user is not worth a card; a change that lets an agent work on it safely can be.
 - **It is too absolute.** "Every" and "never" need something close to a proof. Prefer "generally" or "should not" where there are real exceptions, and name them in a story.
 - **It needs a re-architecture to act on.** Leave it out of the cards.
 

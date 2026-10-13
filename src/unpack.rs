@@ -133,13 +133,15 @@ pub fn order_prompt(cards: &[Card], about: &[(String, String)], projects: &[Proj
          summed across the projects. A cheap change that pays in several projects comes \
          first. An important concern that is expensive to act on does not lead. This is \
          leverage, not importance.\n\n\
-         Value is what the change buys the people who actually use and work on this \
-         software, as the descriptions say who they are. For a personal app on one phone, \
-         that is its one owner, day to day. Hygiene that guards against a risk these people \
-         do not run, such as separating development and production installs of a \
-         sideloaded app with one user, buys nothing, and goes last. Max, on exactly that \
-         card ranked first: \"who cares for a sideloaded app on one phone? This is \
-         incredibly low leverage. It buys nothing for the end users.\"\n\n\
+         Value is what the change buys the stakeholders: the people who use the software, \
+         and the developers and coding agents who work on it, as the descriptions say who \
+         they are. For a personal app on one phone, that is its one owner, and the agents \
+         that change it. Hygiene that guards against a risk none of them runs, such as \
+         separating development and production installs of a sideloaded app with one user, \
+         buys nothing, and goes last. Max, on exactly that card ranked first: \"who cares \
+         for a sideloaded app on one phone? This is incredibly low leverage.\" A \
+         security-flavoured change can still earn its place when it lets an agent work \
+         safely and comfortably, but rarely for much else in software like this.\n\n\
          Take a quick look at the code to judge effort and reach: a few searches and a few \
          files, not a review. Spend at most a few minutes. Do not modify anything.\n\n\
          ## The projects\n\n{projects}\n## The concerns\n\n{cards}\n\
