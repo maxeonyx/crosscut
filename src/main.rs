@@ -956,6 +956,36 @@ fn unpack_concerns(
                 let _ = unpack::write(&root.join("crosscut/landscape.reply.md"), &reply);
             })?;
             ui.say(Say::Step(
+                "Rewording",
+                &format!(
+                    "{} cross-cutting concerns, so each reads at first sight.",
+                    landscape.cards.len()
+                ),
+            ));
+            let reply = unpack::run(
+                &progress,
+                &harness,
+                &unpack::reword_prompt(&landscape.cards),
+                review_model.as_deref().or(run.model.as_deref()),
+                &|c| {
+                    c.current_dir(&root);
+                },
+                &[],
+                timeout.min(Duration::from_secs(600)),
+            );
+            match reply.and_then(|reply| unpack::parse_reword(&reply, &landscape.cards)) {
+                Ok(cards) => {
+                    let dropped = landscape.cards.len() - cards.len();
+                    if dropped > 0 {
+                        ui.say(Say::Progress(&format!(
+                            "Dropped {dropped} that would not read plainly"
+                        )));
+                    }
+                    landscape.cards = cards;
+                }
+                Err(e) => ui.say(Say::Progress(&format!("Kept the unpacked wording: {e}"))),
+            }
+            ui.say(Say::Step(
                 "Prioritising",
                 &format!(
                     "{} cross-cutting concerns by leverage, with a quick look at the code.",

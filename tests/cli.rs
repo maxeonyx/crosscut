@@ -705,6 +705,7 @@ fn map_with_no_concerns_says_how_to_add_one() {
 const UNPACKING_AGENT: &str = r#"p=$(cat); n=$(ls "$PROMPTS" 2>/dev/null | wc -l); mkdir -p "$PROMPTS"; printf '%s' "$p" > "$PROMPTS/$n.md"
 case "$p" in
 *'Describe the project in'*) echo 'A small Python API that serves records.';;
+*'Read each title below once'*) printf 'Ignored prose.\n<crosscut-reword>\nlog-once: keep\nas-of: Derived data should say how old it is\n</crosscut-reword>\n';;
 *'Put these concerns in order of leverage'*) printf 'Ignored prose.\n<crosscut-order>\nas-of\nlog-once\n</crosscut-order>\n';;
 *'Unpack concerns for these projects'*) cat <<'JSON'
 Thinking out loud first.
@@ -776,7 +777,7 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
         .expect("an overview");
     assert!(
         err[overview..].starts_with(
-            "2 cross-cutting concerns highest leverage first\n\n   1  Derived data that can go stale should carry its as-of time  api\n   2  Each error"
+            "2 cross-cutting concerns highest leverage first\n\n   1  Derived data should say how old it is  api\n   2  Each error"
         ),
         "the prioritising pass reordered the cards: {err}"
     );
@@ -820,7 +821,7 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
     let declined = fs::read_to_string(dir.join("crosscut/declined.md")).unwrap();
     assert!(
         declined.contains(
-            "- Derived data that can go stale should carry its as-of time: we already show refresh times"
+            "- Derived data should say how old it is: we already show refresh times"
         ),
         "{declined}"
     );
@@ -877,9 +878,10 @@ fn the_next_unpacking_reuses_descriptions_and_knows_what_was_kept_and_declined()
     let dir = ws.path();
     unpack(dir, &["api"], "\n\nd\nwe already show refresh times\na\n");
     unpack(dir, &[], "\nq\n");
-    // Prompts: describe, unpack, order, review, then only the second unpacking and order.
-    assert_eq!(fs::read_dir(dir.join("prompts")).unwrap().count(), 6);
-    let second = prompt_number(dir, 4);
+    // Prompts: describe, unpack, reword, order, review, then only the second unpacking,
+    // rewording and order.
+    assert_eq!(fs::read_dir(dir.join("prompts")).unwrap().count(), 8);
+    let second = prompt_number(dir, 5);
     assert!(
         flat(&second).contains(
             "must not propose again: - Each error should be logged once, where it is handled"
@@ -899,11 +901,11 @@ fn saved_cards_float_again_without_an_agent_minus_those_already_kept() {
     // Decline the first card, accept the second, which is reviewed.
     unpack(dir, &["api"], "\n\nd\n\na\n");
     let (_, err) = unpack(dir, &["--cards", "crosscut/landscape.json"], "\ns\n");
-    assert!(err.contains("1/1  Derived data that can go stale"), "{err}");
+    assert!(err.contains("1/1  Derived data should say how old it is"), "{err}");
     assert_eq!(
         fs::read_dir(dir.join("prompts")).unwrap().count(),
-        4,
-        "describe, unpack, order, review: no new agent run"
+        5,
+        "describe, unpack, reword, order, review: no new agent run"
     );
 }
 

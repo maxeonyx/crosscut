@@ -18,6 +18,8 @@ use crate::model::{self, Project};
 
 const CARDS_OPEN: &str = "<crosscut-cards>";
 const CARDS_CLOSE: &str = "</crosscut-cards>";
+const REWORD_OPEN: &str = "<crosscut-reword>";
+const REWORD_CLOSE: &str = "</crosscut-reword>";
 const ORDER_OPEN: &str = "<crosscut-order>";
 const ORDER_CLOSE: &str = "</crosscut-order>";
 
@@ -159,6 +161,75 @@ pub fn order_prompt(cards: &[Card], about: &[(String, String)], projects: &[Proj
 
 /// The order in an agent's reply, as indices into `cards`. Anything but a reordering of
 /// exactly these cards is refused.
+/// The prompt that rewords unpacked cards whose titles do not read at first sight, or drops
+/// them. Its answer can only change titles.
+pub fn reword_prompt(cards: &[Card]) -> String {
+    let cards: String = cards
+        .iter()
+        .map(|c| format!("- `{}`: {}\n  {}\n", c.slug, c.title, c.justification))
+        .collect();
+    format!(
+        "Read each title below once, as an engineer who knows the subject and has not read \
+         anything else on the card. The title is the rule a person accepts or declines, and \
+         reviews for later, so they must understand it on first reading, without parsing it.\n\n\
+         Max, about one title: \"This one is hard to parse: 'A plan cached for offline use \
+         should reach further ahead than the longest time it may be offline'. I can't really \
+         understand it.\" A plainer title for the same rule: \"Data cached for offline use \
+         should last longer than the device is likely to stay offline.\"\n\n\
+         The subject of a rule is a plain thing the reader recognises at once: \"Signing \
+         keys\", \"A scheduled job\", \"Retries\". It is never a noun phrase built from a \
+         clause. \"State a person would miss should survive replacing the device\" has to be \
+         untangled; \"Settings and history on a phone should survive a new phone\" does not.\n\n\
+         Each card's justification is there so you know what its rule means. Keep the meaning.\n\n\
+         ## The cards\n\n{cards}\n\
+         ## Your answer\n\n\
+         For every card, write one line: its slug, a colon, then one of these.\n\
+         - `keep`, when the title reads at once.\n\
+         - A better title, when it does not. Keep the rule form (\"X should Y\"), keep it as \
+         general and as true as before, and use the everyday names of things.\n\
+         - `drop`, when it cannot be made plain without losing what makes it true.\n\n\
+         End your reply with those lines, every card exactly once, between `{REWORD_OPEN}` and \
+         `{REWORD_CLOSE}`. Nothing else you write is shown to anyone.\n"
+    )
+}
+
+/// Applies a rewording: each card kept, retitled, or dropped. Every card must be answered
+/// exactly once.
+pub fn parse_reword(reply: &str, cards: &[Card]) -> Result<Vec<Card>, String> {
+    let start = reply
+        .rfind(REWORD_OPEN)
+        .ok_or("the agent's reply had no <crosscut-reword> answer")?;
+    let rest = &reply[start + REWORD_OPEN.len()..];
+    let body = &rest[..rest.find(REWORD_CLOSE).unwrap_or(rest.len())];
+    let mut answers: Vec<Option<&str>> = vec![None; cards.len()];
+    for line in body.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        let (slug, answer) = line
+            .split_once(':')
+            .ok_or_else(|| format!("`{line}` is not `slug: answer`"))?;
+        let slug = slug.trim().trim_matches(['`', '-', ' ']);
+        let i = cards
+            .iter()
+            .position(|c| c.slug == slug)
+            .ok_or_else(|| format!("the rewording names `{slug}`, which is not a card"))?;
+        if answers[i].replace(answer.trim()).is_some() {
+            return Err(format!("the rewording names `{slug}` twice"));
+        }
+    }
+    let mut kept = Vec::new();
+    for (card, answer) in cards.iter().zip(answers) {
+        match answer {
+            None => return Err(format!("the rewording leaves out `{}`", card.slug)),
+            Some("" | "keep" | "`keep`") => kept.push(card.clone()),
+            Some("drop" | "`drop`") => {}
+            Some(title) => kept.push(Card {
+                title: title.trim_matches('"').to_string(),
+                ..card.clone()
+            }),
+        }
+    }
+    Ok(kept)
+}
+
 pub fn parse_order(reply: &str, cards: &[Card]) -> Result<Vec<usize>, String> {
     let start = reply
         .rfind(ORDER_OPEN)
@@ -426,6 +497,29 @@ mod tests {
                 how_to_review: String::new(),
             })
             .collect()
+    }
+
+    #[test]
+    fn a_rewording_keeps_retitles_or_drops_every_card_exactly_once() {
+        let cards = cards(&["a", "b", "c"]);
+        let reword = |body: &str| {
+            parse_reword(
+                &format!("prose\n{REWORD_OPEN}\n{body}\n{REWORD_CLOSE}"),
+                &cards,
+            )
+            .map(|cs| {
+                cs.iter()
+                    .map(|c| format!("{}={}", c.slug, c.title))
+                    .collect::<Vec<_>>()
+            })
+        };
+        assert_eq!(
+            reword("a: keep\nb: Retries should back off\nc: drop").unwrap(),
+            ["a=", "b=Retries should back off"]
+        );
+        assert!(reword("a: keep\nb: keep").is_err(), "c left out");
+        assert!(reword("a: keep\nb: keep\nc: keep\na: drop").is_err());
+        assert!(reword("a: keep\nb: keep\nz: keep").is_err());
     }
 
     #[test]

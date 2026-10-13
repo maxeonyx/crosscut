@@ -91,7 +91,7 @@ pub fn overview_rows(n: usize) -> Vec<Option<usize>> {
     }
 }
 
-pub fn plan_steps(agent: &str) -> [(&'static str, String, &'static str); 5] {
+pub fn plan_steps(agent: &str) -> [(&'static str, String, &'static str); 6] {
     [
         (
             "Describe",
@@ -102,6 +102,11 @@ pub fn plan_steps(agent: &str) -> [(&'static str, String, &'static str); 5] {
             "Unpack",
             format!("cross-cutting concerns for software like it, with {agent}"),
             "a few minutes; never sees your code",
+        ),
+        (
+            "Reword",
+            "each one, so it reads at first sight".into(),
+            "or drop it",
         ),
         (
             "Prioritise",
