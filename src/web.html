@@ -180,7 +180,7 @@ function render(){
   $('#done').innerHTML=renderDone(state.done);
   const id=state.ask?state.ask.id:null;
   if(id!==shownAsk){shownAsk=id;$('#ask').innerHTML=renderAsk(state.ask);wire();
-    const box=$('#ask .ask');if(box)box.scrollIntoView({block:'center'});
+    const box=$('#ask .ask');if(box)box.scrollIntoView({block:box.offsetHeight>innerHeight*.9?'start':'center'});
     const ta=$('#ask textarea');if(ta){ta.oninput=()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+2+'px';};ta.oninput();}
     const t=$('#ask textarea,#ask input[type=text]');if(t&&!REPLAY)t.focus();}
   else if(!state.ask&&state.done)$('#done').scrollIntoView({block:'end'});
