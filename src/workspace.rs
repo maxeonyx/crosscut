@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 
+use crate::style;
+
 /// One repository, with every local clone of it that was found.
 #[derive(Debug, PartialEq)]
 pub struct Repo {
@@ -127,7 +129,11 @@ pub fn short_name(url: &str) -> String {
 /// Asks which repositories to pull in: numbers from `repos`, or `owner/name` for others.
 pub fn choose(input: &mut impl BufRead, repos: &[Repo]) -> Vec<(String, String)> {
     loop {
-        eprint!("\nPull in which? Numbers such as `1 3`, or owner/name for others > ");
+        eprint!(
+            "\n{} {} > ",
+            style::bold("Pull in which?"),
+            style::dim("numbers such as 1 3, or owner/name")
+        );
         let _ = std::io::stderr().flush();
         let mut line = String::new();
         if input.read_line(&mut line).unwrap_or(0) == 0 {
@@ -167,9 +173,9 @@ pub fn pull_in(workspace: &Path, repos: &[(String, String)]) -> Result<Vec<PathB
     for (name, source) in repos {
         let dir = workspace.join(name.rsplit('/').next().unwrap_or(name));
         if dir.join(".git").is_dir() {
-            eprintln!("  {name}: already here");
+            eprintln!("  {}  {}", name, style::dim("already here"));
         } else {
-            eprintln!("  {name}: cloning from {source}");
+            eprintln!("  {}  {}", name, style::dim(source));
             let mut git = Command::new("git");
             git.args(["clone", "--quiet"]);
             // Hosted repositories fetch file contents lazily; local ones are hard-linked.

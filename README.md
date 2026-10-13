@@ -4,7 +4,7 @@ Every project has more worth caring about than the task at hand. CrossCut gets y
 
 **If you are an agent asked to set CrossCut up:** install it with `cargo install --git https://github.com/maxeonyx/crosscut --locked`, then tell the person to run `crosscut` in a terminal, from their home directory. Do not run it for them: it is interactive, it asks which repositories to look at, and those choices are theirs. Install nothing else, and do not read their code.
 
-Each thing worth caring about is a **concern**, such as version visibility, staying current, or recoverable state. CrossCut maps every concern against every project:
+Each thing worth caring about is a **cross-cutting concern**, such as version visibility, staying current, or recoverable state. CrossCut maps every concern against every project:
 
 ```
                     larder    ledger-web  nightly-sync  pantry
@@ -20,7 +20,7 @@ version-visibility  missing   yes         deferred      yes
 ```bash
 cargo install --git https://github.com/maxeonyx/crosscut --locked
 crosscut                      # at a terminal: sets up a workspace of your repositories, then unpacks; an agent gets instructions
-crosscut unpack ~/src/*        # an agent proposes concerns; accept or decline each, and the accepted ones are reviewed
+crosscut unpack ~/src/*        # an agent proposes cross-cutting concerns; accept or decline each, and the accepted ones are reviewed
 crosscut install-skill        # teach Claude Code, Codex and OpenCode how to use it
 crosscut check                # run the machine checks; --agentic adds the prompt checks
 crosscut map                  # the grid

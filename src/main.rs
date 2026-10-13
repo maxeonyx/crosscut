@@ -7,6 +7,7 @@
 mod harness;
 mod model;
 mod report;
+mod style;
 mod unpack;
 mod workspace;
 
@@ -86,9 +87,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Have an agent propose concerns for your projects, and accept or decline each one.
+    /// Have an agent propose cross-cutting concerns for your projects; accept or decline each.
     ///
-    /// The agent reads the projects and proposes concerns, highest leverage first. Each is
+    /// The agent proposes cross-cutting concerns, highest leverage first. Each is
     /// shown as a card: the rule, why it holds, stories, and where it was seen here. Accepted
     /// concerns become directories in crosscut/concerns/ with a prompt check, which is then
     /// run to review every project for the rule. Declined ones go to crosscut/declined.md
@@ -104,14 +105,14 @@ enum Cmd {
         /// running the agent.
         #[arg(long)]
         cards: Option<PathBuf>,
-        /// Model for the reviews of accepted concerns (default: --model).
+        /// Model for the reviews of accepted cross-cutting concerns (default: --model).
         #[arg(long)]
         review_model: Option<String>,
         #[command(flatten)]
         run: RunArgs,
     },
 
-    /// Write crosscut/report.html: every concern, its status in each project, and what the
+    /// Write crosscut/report.html: every cross-cutting concern, its status in each project, and what the
     /// reviews found.
     Report {
         /// Directory containing crosscut/ (default: search upwards from here).
@@ -146,7 +147,7 @@ enum Cmd {
         dry_run: bool,
     },
 
-    /// Show every concern against every project, as one grid.
+    /// Show every cross-cutting concern against every project, as one grid.
     #[command(
         after_help = "A cell shows the human decision if there is one, otherwise the latest\n\
         observation. `*` marks a decision the latest observation contradicts.\n\n\
@@ -678,8 +679,11 @@ fn check(
                         changed += 1;
                         let from = previous.map_or("(none)", |p| p.status.as_str());
                         println!(
-                            "{}/{}: {from} → {status}: {evidence}",
-                            concern.slug, project.name
+                            "{}/{}: {} {}: {evidence}",
+                            concern.slug,
+                            project.name,
+                            style::dim(&format!("{from} →")),
+                            style::status(status)
                         );
                     }
                     rows.retain(|r| r.project != project.name);
@@ -723,7 +727,7 @@ fn welcome() -> Result<ExitCode, String> {
     };
     if let Ok(root) = model::find_root(None) {
         map(None, Some(root.clone()))?;
-        if !unpack::confirm(&mut input, "\nLook for more concerns?") {
+        if !unpack::confirm(&mut input, "\nLook for more cross-cutting concerns?") {
             return Ok(ExitCode::SUCCESS);
         }
         drop(input); // unpacking reads stdin too
@@ -736,51 +740,66 @@ fn welcome() -> Result<ExitCode, String> {
     // sits at the bottom, next to the prompt, and number 1, the most recently used repository,
     // is nearest to it.
     let repos = workspace::find(&here, 3);
-    eprintln!("CrossCut: cross-cutting concerns, kept visible across your repositories.\n");
-    if !repos.is_empty() {
-        eprintln!("Repositories on this machine:");
-    }
+    eprintln!(
+        "{}  {}\n",
+        style::bold("CrossCut"),
+        style::dim("cross-cutting concerns, kept visible across your repositories")
+    );
     for (i, repo) in repos.iter().enumerate().rev() {
         let clones = match repo.clones.len() {
             1 => tilde(&repo.clones[0]),
             n => format!("{n} clones"),
         };
-        eprintln!("  {:>3}. {}  ({clones})", i + 1, repo.name);
+        eprintln!(
+            "  {}  {}  {}",
+            style::dim(&format!("{:>3}", i + 1)),
+            repo.name,
+            style::dim(&clones)
+        );
     }
     let suggested = here.join("crosscut-workspace");
     let harness = Harness::resolve(None);
     // One line per paragraph: the terminal wraps them to its own width.
     eprintln!(
-        "\nCrossCut: cross-cutting concerns, kept visible across your repositories.\n\n\
-         To find the concerns worth applying to your code, it needs the repositories cloned side by side in a workspace. If you let it, it sets that up for you: pick repositories{}, and they are cloned fresh into {}. Your own checkouts are never touched.\n\n\
-         It then uses your existing coding agent to review your code. {}\n\n\
-         Instead, to use checkouts in place: crosscut unpack ~/src/api ~/src/web",
+        "\n\n{}  {}\n\n\
+         Pick the repositories to look at{}. They are cloned fresh into {}, and your own checkouts are never touched. Then {} proposes cross-cutting concerns, and reviews your code for the ones you accept.\n\n\
+         {}",
+        style::bold("CrossCut"),
+        style::dim("cross-cutting concerns, kept visible across your repositories"),
         if repos.is_empty() {
             format!(
-                " as owner/name (none found in {} or three levels below)",
-                tilde(&here)
+                ", as owner/name {}",
+                style::dim(&format!("(none found in {} or three levels below)", tilde(&here)))
             )
         } else {
-            " above (1 is the one you used last)".into()
+            format!(" {}", style::dim("(1 is the one you used last)"))
         },
-        tilde(&suggested),
+        style::accent(&tilde(&suggested)),
         match &harness {
-            Ok(h) => format!("Found: {}.", h.name()),
-            Err(_) => "None found: install and log in to claude, codex or opencode.".into(),
+            Ok(h) => format!("your coding agent, {},", style::accent(h.name())),
+            Err(_) => "a coding agent (none found: install and log in to claude, codex or opencode)".into(),
         },
+        style::dim("To use checkouts in place instead: crosscut unpack ~/src/api ~/src/web"),
     );
     if suggested.join("crosscut").is_dir() {
         eprintln!(
-            "You already have a workspace there. To carry on in it: cd {} && crosscut",
-            tilde(&suggested)
+            "{}",
+            style::dim(&format!(
+                "You already have a workspace there. To carry on in it: cd {} && crosscut",
+                tilde(&suggested)
+            ))
         );
     }
-    let harness = harness?;
+    harness?;
     let chosen = workspace::choose(&mut input, &repos);
     if chosen.is_empty() {
         return Ok(ExitCode::SUCCESS);
     }
-    eprint!("\nWorkspace directory [{}] > ", tilde(&suggested));
+    eprint!(
+        "\n{} {} > ",
+        style::bold("Workspace directory"),
+        style::dim(&format!("[{}]", tilde(&suggested)))
+    );
     let _ = std::io::Write::flush(&mut std::io::stderr());
     let mut line = String::new();
     let _ = std::io::BufRead::read_line(&mut input, &mut line);
@@ -792,13 +811,14 @@ fn welcome() -> Result<ExitCode, String> {
             None => here.join(path),
         },
     };
-    eprintln!("\nPulling in:");
+    eprintln!("\n{}", style::bold("Cloning"));
     let dirs = workspace::pull_in(&workspace, &chosen)?;
     eprintln!(
-        "\nThe workspace is {}. Run `crosscut` there to come back to it.\n\
-         The agent is {}.\n",
-        tilde(&workspace),
-        harness.name()
+        "\n{}\n",
+        style::dim(&format!(
+            "Workspace: {}. Run `crosscut` there to come back to it.",
+            tilde(&workspace)
+        ))
     );
     unpack_concerns(
         dirs,
@@ -868,14 +888,14 @@ fn unpack_concerns(
         None => {
             let harness = Harness::resolve(run.harness.clone())?;
             let timeout = Duration::from_secs(run.timeout);
-            eprintln!("{}", unpack::WHAT_HAPPENS);
+            eprintln!("{}", unpack::what_happens());
             // Unpacking works from short descriptions, never from the code.
             let mut about = Vec::new();
             for project in &projects {
                 let text = match unpack::about(&root, &project.name) {
                     Some(text) => text,
                     None => {
-                        eprintln!("Describing {} from its README and manifests.", project.name);
+                        eprintln!("\n{} {}", style::bold("Describing"), project.name);
                         let draft = unpack::run(
                             &harness,
                             &unpack::describe_prompt(project),
@@ -899,15 +919,22 @@ fn unpack_concerns(
                 std::fs::read_to_string(root.join("crosscut/declined.md")).unwrap_or_default();
             let prompt = unpack::prompt(&prompt("unpack")?, &about, &known, &declined);
             eprintln!(
-                "\nUnpacking concerns for {}, from their descriptions alone. This takes a few minutes: go and get a coffee.",
-                about.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(", ")
+                "\n{} cross-cutting concerns for {}, from their descriptions alone. {}",
+                style::bold("Unpacking"),
+                about
+                    .iter()
+                    .map(|(n, _)| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" and "),
+                style::italic("This takes a few minutes: go and get a coffee.")
             );
             let reply = unpack::run(&harness, &prompt, run.model.as_deref(), &root, &[], timeout)?;
             let mut landscape = unpack::parse(&reply).inspect_err(|_| {
                 let _ = unpack::write(&root.join("crosscut/landscape.reply.md"), &reply);
             })?;
             eprintln!(
-                "\nPutting {} concerns in order of leverage, with a quick look at the code.",
+                "\n{} {} cross-cutting concerns by leverage, with a quick look at the code.",
+                style::bold("Prioritising"),
                 landscape.cards.len()
             );
             let reply = unpack::run(
@@ -925,7 +952,7 @@ fn unpack_concerns(
                         .map(|i| landscape.cards[i].clone())
                         .collect()
                 }
-                Err(e) => eprintln!("  Kept the unpacked order: {e}"),
+                Err(e) => eprintln!("{}", style::dim(&format!("  Kept the unpacked order: {e}"))),
             }
             let json = serde_json::to_string_pretty(&landscape).expect("serialisable");
             unpack::write(&landscape_path, &json)?;
@@ -938,16 +965,26 @@ fn unpack_concerns(
         .iter()
         .filter(|card| !concerns.iter().any(|c| c.slug == card.slug))
         .collect();
-    eprintln!("\n{} concerns, highest leverage first:\n", fresh.len());
+    eprintln!(
+        "\n\n{} {}\n",
+        style::bold(&match fresh.len() {
+            1 => "1 cross-cutting concern".to_string(),
+            n => format!("{n} cross-cutting concerns"),
+        }),
+        style::dim("highest leverage first")
+    );
     for (i, card) in fresh.iter().enumerate() {
         eprintln!(
-            "  {:>2}. {}  ({})",
-            i + 1,
+            "  {}  {}  {}",
+            style::dim(&format!("{:>2}", i + 1)),
             card.title,
-            card.projects.join(", ")
+            style::dim(&card.projects.join(" · "))
         );
     }
-    eprint!("\nEnter to go through them one at a time > ");
+    eprint!(
+        "\n{} > ",
+        style::dim("Enter to go through them one at a time")
+    );
     let _ = std::io::Write::flush(&mut std::io::stderr());
     let mut line = String::new();
     let _ = std::io::BufRead::read_line(&mut input, &mut line);
@@ -956,12 +993,13 @@ fn unpack_concerns(
         eprint!("{}", unpack::render(card, i + 1, fresh.len()));
         match unpack::ask(&mut input) {
             unpack::Answer::Accept => {
-                let dir = unpack::accept(&root, card, &today)?;
-                eprintln!("  Accepted: {}", dir.display());
+                unpack::accept(&root, card, &today)?;
+                eprintln!("  {}", style::good("✓ accepted"));
                 accepted.push(card.slug.clone());
             }
             unpack::Answer::Decline(reason) => {
                 unpack::decline(&root, card, &reason, &today)?;
+                eprintln!("  {}", style::dim("✗ declined"));
                 declined += 1;
             }
             unpack::Answer::Skip => skipped += 1,
@@ -970,15 +1008,21 @@ fn unpack_concerns(
     }
     drop(input);
     eprintln!(
-        "\n{} accepted, {declined} declined, {skipped} skipped, of {} cards.",
-        accepted.len(),
-        fresh.len()
+        "\n\n{} {}",
+        style::bold(&format!("{} accepted", accepted.len())),
+        style::dim(&format!(
+            "{declined} declined, {skipped} skipped, of {}",
+            fresh.len()
+        ))
     );
     if accepted.is_empty() {
         return Ok(ExitCode::SUCCESS);
     }
 
-    eprintln!("\nReviewing every project for the accepted concerns.\n");
+    eprintln!(
+        "\n{} your code for the cross-cutting concerns you accepted.\n",
+        style::bold("Reviewing")
+    );
     let review = RunArgs {
         model: review_model.or(run.model.clone()),
         root: Some(root.clone()),
@@ -987,7 +1031,11 @@ fn unpack_concerns(
     let status = check(accepted, true, review, false)?;
     println!();
     map(None, Some(root.clone()))?;
-    println!("\n{}", report::write(&root)?.display());
+    println!(
+        "\n{}  file://{}",
+        style::bold("Report"),
+        report::write(&root)?.display()
+    );
     Ok(status)
 }
 
@@ -1029,7 +1077,7 @@ fn map(project: Option<String>, root: Option<PathBuf>) -> Result<ExitCode, Strin
     }
     if concerns.is_empty() {
         println!(
-            "no concerns yet in {}; `crosscut prompt setup` or `crosscut prompt establish` shows how to add them",
+            "no cross-cutting concerns yet in {}; `crosscut prompt setup` or `crosscut prompt establish` shows how to add them",
             root.join("crosscut/concerns").display()
         );
         return Ok(ExitCode::SUCCESS);
@@ -1070,7 +1118,7 @@ fn map(project: Option<String>, root: Option<PathBuf>) -> Result<ExitCode, Strin
                 None if cells.iter().all(Option::is_none) => continue,
                 None => "·".into(),
             };
-            line.push_str(&format!("  {text:w$}"));
+            line.push_str(&format!("  {}", style::status(&format!("{text:w$}"))));
         }
         println!("{}", line.trim_end());
     }

@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::harness::{self, Harness};
 use crate::model::{self, Project};
+use crate::style;
 
 const CARDS_OPEN: &str = "<crosscut-cards>";
 const CARDS_CLOSE: &str = "</crosscut-cards>";
@@ -102,16 +103,42 @@ pub fn prompt(
     )
 }
 
-/// What `crosscut unpack` is about to do, shown before it starts. One line per step, for the
-/// terminal to wrap.
-pub const WHAT_HAPPENS: &str = "\
-Here is what happens next:
-  1. Describe. A quick look at each repository's README and build files says, in a few sentences, what kind of software it is. You can correct each description.
-  2. Unpack. Claude lays out the cross-cutting concerns that software of this kind meets, from the descriptions alone. It never sees your code, so every concern is a general rule, not a bug report. This takes a few minutes.
-  3. Prioritise. A quick look at the code puts the concerns in order of leverage across your repositories. It can only reorder them.
-  4. Choose. You see them all, then one at a time. Accept the ones worth keeping visible. Decline the rest, with a reason if you like, and they will not come back.
-  5. Review. Each accepted concern becomes a concern directory, and an agent reviews your code for it. You get a map and a report.
-";
+/// What `crosscut unpack` is about to do, shown before it starts.
+pub fn what_happens() -> String {
+    let step = |n: &str, verb: &str, what: &str, note: &str| {
+        format!(
+            "  {}  {}  {}  {}\n",
+            style::dim(n),
+            style::bold(&format!("{verb:<10}")),
+            what,
+            style::dim(note)
+        )
+    };
+    format!(
+        "{}\n\n{}{}{}{}{}",
+        style::bold("What happens next"),
+        step(
+            "1",
+            "Describe",
+            "each repository, from its README",
+            "seconds; you can correct it"
+        ),
+        step(
+            "2",
+            "Unpack",
+            "cross-cutting concerns for software like it",
+            "a few minutes; never sees your code"
+        ),
+        step(
+            "3",
+            "Prioritise",
+            "by leverage across your repositories",
+            "it can only reorder them"
+        ),
+        step("4", "Choose", "accept or decline each one", ""),
+        step("5", "Review", "your code, for the ones you accept", ""),
+    )
+}
 
 /// The prompt that puts unpacked cards in order of leverage. Its answer is only an order: no
 /// text it writes reaches the person.
@@ -251,7 +278,7 @@ pub fn run(
                 std::thread::sleep(Duration::from_millis(200));
                 let now = started.elapsed().as_secs();
                 if now >= shown.load(Ordering::Relaxed) + 30 {
-                    eprintln!("  {now:>4}s  still thinking");
+                    eprintln!("{}", style::dim(&format!("  {now:>4}s  still thinking")));
                     shown.store(now, Ordering::Relaxed);
                 }
             }
@@ -269,7 +296,13 @@ pub fn run(
                         if block["type"] == "tool_use" {
                             steps += 1;
                             let now = started.elapsed().as_secs();
-                            eprintln!("  {now:>4}s  {}", describe_tool(block, projects));
+                            eprintln!(
+                                "{}",
+                                style::dim(&format!(
+                                    "  {now:>4}s  {}",
+                                    describe_tool(block, projects)
+                                ))
+                            );
                             shown.store(now, Ordering::Relaxed);
                         }
                     }
@@ -291,8 +324,11 @@ pub fn run(
     if claude {
         let secs = started.elapsed().as_secs();
         match steps {
-            0 => eprintln!("  {secs:>4}s  done"),
-            n => eprintln!("  {secs:>4}s  done, after {n} steps"),
+            0 => eprintln!("{}", style::dim(&format!("  {secs:>4}s  done"))),
+            n => eprintln!(
+                "{}",
+                style::dim(&format!("  {secs:>4}s  done, after {n} steps"))
+            ),
         }
         return result.unwrap_or_else(|| Err("the agent finished without a result".into()));
     }
@@ -316,18 +352,27 @@ fn describe_tool(block: &serde_json::Value, projects: &[Project]) -> String {
     format!("{name:<5} {detail}")
 }
 
-/// One card, laid out for a terminal.
+/// One card, laid out for a terminal. Of its stories, it shows the first two and the last,
+/// which is usually where the rule does not apply.
 pub fn render(card: &Card, n: usize, of: usize) -> String {
-    let mut out = format!("\n[{n}/{of}]  {}\n\n", card.title);
+    let mut out = format!(
+        "\n\n{}  {}\n{}\n\n",
+        style::dim(&format!("{n}/{of}")),
+        style::bold(&card.title),
+        style::dim(&format!("      {}", card.projects.join(" · ")))
+    );
     out += &line("  ", &card.justification);
     out += "\n";
-    for story in &card.stories {
-        out += &line("  • ", story);
+    let stories = &card.stories;
+    let shown: Vec<&String> = if stories.len() > 3 {
+        vec![&stories[0], &stories[1], &stories[stories.len() - 1]]
+    } else {
+        stories.iter().collect()
+    };
+    for story in shown {
+        out += &line(&format!("  {} ", style::dim("•")), story);
     }
-    out += &line(
-        "\n  ",
-        &format!("Here ({}): {}", card.projects.join(", "), card.here),
-    );
+    out += &line(&format!("\n  {}  ", style::italic("Here")), &card.here);
     out
 }
 
@@ -342,7 +387,14 @@ pub fn line(prefix: &str, text: &str) -> String {
 /// Asks for one card's answer on `input`, prompting on stderr.
 pub fn ask(input: &mut impl BufRead) -> Answer {
     loop {
-        eprint!("\n  [a]ccept  [d]ecline  [s]kip  [q]uit > ");
+        let key = |k: &str, rest: &str| format!("{}{}", style::accent(&style::bold(k)), rest);
+        eprint!(
+            "\n  {}   {}   {}   {} > ",
+            key("a", "ccept"),
+            key("d", "ecline"),
+            key("s", "kip"),
+            key("q", "uit")
+        );
         let _ = std::io::stderr().flush();
         let mut line = String::new();
         if input.read_line(&mut line).unwrap_or(0) == 0 {
@@ -353,7 +405,7 @@ pub fn ask(input: &mut impl BufRead) -> Answer {
             "s" | "skip" => return Answer::Skip,
             "q" | "quit" => return Answer::Quit,
             "d" | "decline" => {
-                eprint!("  Why? (one line, optional) > ");
+                eprint!("  {} > ", style::dim("Why? (optional)"));
                 let _ = std::io::stderr().flush();
                 let mut reason = String::new();
                 let _ = input.read_line(&mut reason);
@@ -366,7 +418,7 @@ pub fn ask(input: &mut impl BufRead) -> Answer {
 
 /// A yes-or-no question, yes by default.
 pub fn confirm(input: &mut impl BufRead, question: &str) -> bool {
-    eprint!("{question} [Y/n] > ");
+    eprint!("{} {} > ", style::bold(question), style::dim("[Y/n]"));
     let _ = std::io::stderr().flush();
     let mut line = String::new();
     input.read_line(&mut line).unwrap_or(0) > 0 && !line.trim().to_lowercase().starts_with('n')
@@ -454,8 +506,17 @@ pub fn about_path(root: &Path, project: &str) -> PathBuf {
 
 /// Shows a new description and asks whether to keep it or replace it.
 pub fn confirm_about(input: &mut impl BufRead, project: &str, text: &str) -> String {
-    eprint!("\n{}", line(&format!("  {project}: "), text));
-    eprint!("  Enter to keep it, or type a better description > ");
+    eprint!(
+        "\n{}",
+        line(
+            &format!("  {}  ", style::bold(project)),
+            &style::italic(text.trim())
+        )
+    );
+    eprint!(
+        "  {} > ",
+        style::dim("Enter to keep it, or type a better description")
+    );
     let _ = std::io::stderr().flush();
     let mut line = String::new();
     let _ = input.read_line(&mut line);

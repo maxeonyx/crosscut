@@ -44,7 +44,11 @@ This repository builds the tool. Its tests, evaluations and demos use invented e
 | `docs/design.md` | Why CrossCut has this shape: episodes, candidates, flows, and open questions. Update it when the shape changes. |
 | `docs/index.html` | The site. It also passes on the doctrine, so it must keep the carry-forward paragraph, and a test checks that. |
 
-## 5. Commands
+## 5. Words
+
+In English, for people (CLI output, docs, the site, slides), always say **cross-cutting concern**. "Concern" alone is the term in code and file names (`concern.md`, `crosscut/concerns/`).
+
+## 6. Commands
 
 ```bash
 cargo test                          # fast, offline, no model calls

@@ -83,7 +83,7 @@ details summary{cursor:pointer;color:var(--accent);font-size:13px;margin:6px 0}
 <body>
 <main>
 <h1>CrossCut map</h1>
-<p class="lede">Each row is a concern: a rule worth keeping visible. Each cell is what the latest review saw in that project, or what a person decided. Nothing here is a gate or a score.</p>
+<p class="lede">Each row is a cross-cutting concern: a rule worth keeping visible. Each cell is what the latest review saw in that project, or what a person decided. Nothing here is a gate or a score.</p>
 <div class="grid"><table id="grid"></table></div>
 <div id="concerns"></div>
 <div id="declined"></div>

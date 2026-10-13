@@ -693,7 +693,7 @@ fn map_with_no_concerns_says_how_to_add_one() {
     fs::create_dir_all(j.root.join("crosscut/concerns")).unwrap();
     let out = j.ok(&["map"]);
     assert!(
-        out.contains("no concerns yet") && out.contains("crosscut prompt establish"),
+        out.contains("no cross-cutting concerns yet") && out.contains("crosscut prompt establish"),
         "{out}"
     );
 }
@@ -763,20 +763,20 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
     let (out, err) = unpack(dir, &["api"], "\n\nd\nwe already show refresh times\na\n");
 
     assert!(
-        err.contains("api: A small Python API that serves records."),
+        err.contains("api  A small Python API that serves records."),
         "{err}"
     );
     assert_eq!(
         fs::read_to_string(dir.join("crosscut/about/api.md")).unwrap(),
         "A small Python API that serves records.\n"
     );
-    assert!(err.contains("Here is what happens next:"), "{err}");
+    assert!(err.contains("What happens next"), "{err}");
     let overview = err
-        .find("2 concerns, highest leverage first")
+        .find("2 cross-cutting concerns highest leverage first")
         .expect("an overview");
     assert!(
         err[overview..].starts_with(
-            "2 concerns, highest leverage first:\n\n   1. Derived data that can go stale should carry its as-of time  (api)\n   2. Each error"
+            "2 cross-cutting concerns highest leverage first\n\n   1  Derived data that can go stale should carry its as-of time  api\n   2  Each error"
         ),
         "the prioritising pass reordered the cards: {err}"
     );
@@ -785,15 +785,15 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
         "only the order reaches the person"
     );
     assert!(
-        err.contains("[2/2]  Each error should be logged once"),
+        err.contains("2/2  Each error should be logged once"),
         "{err}"
     );
     assert!(
-        err.contains("Here (api): APIs tend to log in every layer"),
+        err.contains("Here  APIs tend to log in every layer"),
         "{err}"
     );
     assert!(
-        err.contains("1 accepted, 1 declined, 0 skipped, of 2 cards"),
+        err.contains("1 accepted 1 declined, 0 skipped, of 2"),
         "{err}"
     );
     assert_eq!(
@@ -897,10 +897,7 @@ fn saved_cards_float_again_without_an_agent_minus_those_already_kept() {
     // Decline the first card, accept the second, which is reviewed.
     unpack(dir, &["api"], "\n\nd\n\na\n");
     let (_, err) = unpack(dir, &["--cards", "crosscut/landscape.json"], "\ns\n");
-    assert!(
-        err.contains("[1/1]  Derived data that can go stale"),
-        "{err}"
-    );
+    assert!(err.contains("1/1  Derived data that can go stale"), "{err}");
     assert_eq!(
         fs::read_dir(dir.join("prompts")).unwrap().count(),
         4,
