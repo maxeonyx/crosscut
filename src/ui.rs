@@ -25,8 +25,8 @@ pub enum Say<'a> {
     Progress(&'a str),
     /// A repository being cloned, or found already there.
     Item(&'a str, &'a str),
-    /// The outcome of one card.
-    Answered(&'a Answer),
+    /// The outcome of one card, and its title.
+    Answered(&'a Answer, &'a str),
     /// How the choosing went.
     Summary {
         accepted: usize,
@@ -83,6 +83,16 @@ pub fn shown_stories(card: &Card) -> Vec<&String> {
     }
 }
 
+/// Which cards an overview lists: all of a short list, or the first three and the last two
+/// of a long one, with `None` where the rest are left out.
+pub fn overview_rows(n: usize) -> Vec<Option<usize>> {
+    if n <= 7 {
+        (0..n).map(Some).collect()
+    } else {
+        [Some(0), Some(1), Some(2), None, Some(n - 2), Some(n - 1)].to_vec()
+    }
+}
+
 pub fn plan_steps(agent: &str) -> [(&'static str, String, &'static str); 5] {
     [
         (
@@ -130,7 +140,7 @@ impl Ui for Terminal {
             Say::Wait(text) => eprintln!("{}", style::italic(text)),
             Say::Progress(text) => eprintln!("{}", style::dim(&format!("  {text}"))),
             Say::Item(name, detail) => eprintln!("  {name}  {}", style::dim(detail)),
-            Say::Answered(answer) => match answer {
+            Say::Answered(answer, _) => match answer {
                 Answer::Accept => eprintln!("  {}", style::good("✓ accepted")),
                 Answer::Decline(_) => eprintln!("  {}", style::dim("✗ declined")),
                 Answer::Skip | Answer::Quit => {}
@@ -228,13 +238,19 @@ impl Ui for Terminal {
             }),
             style::dim("highest leverage first")
         );
-        for (i, card) in cards.iter().enumerate() {
-            eprintln!(
-                "  {}  {}  {}",
-                style::dim(&format!("{:>2}", i + 1)),
-                card.title,
-                style::dim(&card.projects.join(" · "))
-            );
+        for row in overview_rows(cards.len()) {
+            match row {
+                Some(i) => eprintln!(
+                    "  {}  {}  {}",
+                    style::dim(&format!("{:>2}", i + 1)),
+                    cards[i].title,
+                    style::dim(&cards[i].projects.join(" · "))
+                ),
+                None => eprintln!(
+                    "  {}",
+                    style::dim(&format!("    … {} more …", cards.len() - 5))
+                ),
+            }
         }
         eprint!(
             "\n{} > ",
@@ -292,5 +308,20 @@ impl Ui for Terminal {
             crate::report::write(root)?.display()
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::overview_rows;
+
+    #[test]
+    fn a_long_overview_shows_the_first_three_and_the_last_two() {
+        assert_eq!(overview_rows(3), [Some(0), Some(1), Some(2)]);
+        assert_eq!(overview_rows(7).len(), 7);
+        assert_eq!(
+            overview_rows(23),
+            [Some(0), Some(1), Some(2), None, Some(21), Some(22)]
+        );
     }
 }

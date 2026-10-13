@@ -10,6 +10,7 @@ mod report;
 mod style;
 mod ui;
 mod unpack;
+mod web;
 mod workspace;
 
 use std::io::IsTerminal;
@@ -85,6 +86,12 @@ const FINDINGS_CLOSE: &str = "</crosscut-findings>";
 struct Cli {
     #[command(subcommand)]
     command: Option<Cmd>,
+    /// With no command: set up in this terminal instead of a page in your browser.
+    #[arg(long, conflicts_with = "browser")]
+    terminal: bool,
+    /// With no command: set up in a page in your browser, even without a terminal.
+    #[arg(long)]
+    browser: bool,
 }
 
 #[derive(Subcommand)]
@@ -227,11 +234,13 @@ struct RunArgs {
 }
 
 fn main() -> ExitCode {
-    let result = match Cli::parse().command {
-        // A person at a terminal is set up interactively; an agent gets instructions.
-        None if std::io::stdin().is_terminal() && std::io::stderr().is_terminal() => {
-            welcome(&ui::Terminal)
-        }
+    let cli = Cli::parse();
+    let tty = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
+    let result = match cli.command {
+        // A person at a terminal is set up in their browser, or in the terminal if they ask;
+        // an agent gets instructions.
+        None if cli.terminal && tty => welcome(&ui::Terminal),
+        None if cli.browser || tty => in_browser(tty),
         None => {
             print!("{}", orientation());
             Ok(ExitCode::SUCCESS)
@@ -785,6 +794,30 @@ fn welcome(ui: &dyn ui::Ui) -> Result<ExitCode, String> {
     )
 }
 
+/// Runs the welcome in a page served on localhost, and keeps serving it afterwards so the
+/// map and report stay readable.
+fn in_browser(open: bool) -> Result<ExitCode, String> {
+    let browser = web::Browser::start()?;
+    eprintln!(
+        "{}  {}\n\n  {}\n",
+        style::bold("CrossCut"),
+        style::dim("continue in your browser"),
+        style::accent(&browser.url)
+    );
+    if open {
+        browser.open();
+    }
+    let result = welcome(&browser);
+    browser.end(result.as_ref().err().map(String::as_str));
+    eprintln!(
+        "\n{}",
+        style::dim("Done. The page stays up until you press Ctrl-C.")
+    );
+    loop {
+        std::thread::park();
+    }
+}
+
 fn home() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
@@ -931,6 +964,7 @@ fn unpack_concerns(
         .filter(|card| !concerns.iter().any(|c| c.slug == card.slug))
         .collect();
     ui.overview(&fresh);
+    ui.say(Say::Step("Choosing", ""));
     let (mut accepted, mut declined, mut skipped) = (Vec::new(), 0, 0);
     for (i, card) in fresh.iter().enumerate() {
         let answer = ui.card(card, i + 1, fresh.len());
@@ -946,7 +980,7 @@ fn unpack_concerns(
             unpack::Answer::Skip => skipped += 1,
             unpack::Answer::Quit => break,
         }
-        ui.say(Say::Answered(&answer));
+        ui.say(Say::Answered(&answer, &card.title));
     }
     ui.say(Say::Summary {
         accepted: accepted.len(),

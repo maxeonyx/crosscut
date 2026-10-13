@@ -932,3 +932,142 @@ fn an_unreadable_answer_is_kept_for_inspection() {
         "no cards here\n"
     );
 }
+
+// --- the browser -----------------------------------------------------------------------
+
+/// One HTTP exchange with the page's server, returning the response body. Reads up to the
+/// declared Content-Length, so a server that resets the connection after answering is fine.
+fn http(url: &str, method: &str, path: &str, body: &str) -> String {
+    use std::io::{Read, Write};
+    let addr = url.trim_start_matches("http://").trim_end_matches('/');
+    let mut stream = std::net::TcpStream::connect(addr).unwrap();
+    write!(
+        stream,
+        "{method} {path} HTTP/1.1\r\nHost: {addr}\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    )
+    .unwrap();
+    let mut response = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        let text = String::from_utf8_lossy(&response).into_owned();
+        if let Some((head, rest)) = text.split_once("\r\n\r\n") {
+            let length: usize = head
+                .lines()
+                .find_map(|l| {
+                    l.to_lowercase()
+                        .strip_prefix("content-length:")
+                        .map(|v| v.trim().parse().unwrap())
+                })
+                .unwrap_or(0);
+            if rest.len() >= length {
+                return rest[..length].to_string();
+            }
+        }
+        let n = stream.read(&mut chunk).unwrap();
+        assert!(n > 0, "the server closed before answering: {text}");
+        response.extend_from_slice(&chunk[..n]);
+    }
+}
+
+#[test]
+fn the_browser_asks_the_same_questions_and_ends_on_the_map() {
+    use std::io::BufRead;
+    let home = tempfile::tempdir().unwrap();
+    let repo = home.path().join("src/api");
+    fs::create_dir_all(&repo).unwrap();
+    fs::write(repo.join("app.py"), "print('hi')\n").unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["add", "app.py"],
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-qm",
+            "init",
+        ],
+    ] {
+        assert!(std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success());
+    }
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_crosscut"))
+        .arg("--browser")
+        .env("CROSSCUT_HARNESS", UNPACKING_AGENT)
+        .env("PROMPTS", home.path().join("prompts"))
+        .env("HOME", home.path())
+        .current_dir(home.path())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut lines = std::io::BufReader::new(child.stderr.take().unwrap()).lines();
+    let url = loop {
+        let line = lines.next().expect("a URL before exiting").unwrap();
+        if let Some(i) = line.find("http://127.0.0.1:") {
+            break line[i..].trim().to_string();
+        }
+    };
+    std::thread::spawn(move || for _ in lines {});
+
+    let mut kinds = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let done = loop {
+        assert!(Instant::now() < deadline, "asked: {kinds:?}");
+        let state: serde_json::Value =
+            serde_json::from_str(&http(&url, "GET", "/state", "")).unwrap();
+        if let Some(done) = state["done"].as_object().filter(|_| state["ask"].is_null()) {
+            break done.clone();
+        }
+        let ask = &state["ask"];
+        if ask.is_null() || kinds.last() == Some(&ask["id"].to_string()) {
+            std::thread::sleep(Duration::from_millis(100));
+            continue;
+        }
+        kinds.push(ask["id"].to_string());
+        let value = match ask["kind"].as_str().unwrap() {
+            "yesno" => serde_json::json!(true),
+            // It has no remote, so it is cloned from its path.
+            "repos" => serde_json::json!("1"),
+            "workspace" => ask["suggested"].clone(),
+            "about" => ask["draft"].clone(),
+            "overview" => serde_json::Value::Null,
+            "card" => serde_json::json!({"a": "accept"}),
+            other => panic!("unexpected question {other}"),
+        };
+        http(
+            &url,
+            "POST",
+            "/answer",
+            &serde_json::json!({"id": ask["id"], "value": value}).to_string(),
+        );
+    };
+    let report = http(&url, "GET", "/report", "");
+    let _ = child.kill();
+    let _ = child.wait();
+    let map = &done["map"];
+    assert_eq!(map["projects"], serde_json::json!(["api"]), "{done:?}");
+    let slugs: Vec<&str> = map["concerns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["slug"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        slugs,
+        ["as-of", "log-once"],
+        "both cards were accepted and reviewed"
+    );
+    assert_eq!(map["concerns"][0]["cells"][0]["observed"], "partly");
+    assert!(report.contains("Each error should be logged once"));
+    let workspace = home.path().join("crosscut-workspace");
+    assert!(
+        workspace.join("api/app.py").is_file(),
+        "a fresh clone, beside the original"
+    );
+}

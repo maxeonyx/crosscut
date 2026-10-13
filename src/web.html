@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CrossCut</title>
+<style>
+:root{--bg:#f7f6f2;--panel:#fff;--ink:#1d1c1a;--muted:#6f6c66;--faint:#a6a39c;--line:#e3e0d8;--accent:#2f6f8f;--accent-ink:#fff;--good:#2f7d4f;--good-bg:#e3f1e8;--warn:#9a5b10;--warn-bg:#f8ecd7;--na-bg:#efede8;
+--sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--mono:ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#121416;--panel:#1a1d20;--ink:#e9e7e2;--muted:#a3a09a;--faint:#6b6964;--line:#2b2f33;--accent:#7cc4e4;--accent-ink:#06222f;--good:#8fcf9b;--good-bg:#1c3324;--warn:#e8b86b;--warn-bg:#3a2e18;--na-bg:#24272a}}
+:root[data-theme=dark]{--bg:#121416;--panel:#1a1d20;--ink:#e9e7e2;--muted:#a3a09a;--faint:#6b6964;--line:#2b2f33;--accent:#7cc4e4;--accent-ink:#06222f;--good:#8fcf9b;--good-bg:#1c3324;--warn:#e8b86b;--warn-bg:#3a2e18;--na-bg:#24272a}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 var(--sans);padding:0 16px 30vh}
+main{max-width:760px;margin:0 auto}
+header{padding:56px 0 28px}
+header h1{font-size:34px;margin:0;letter-spacing:-.02em}
+header p{margin:4px 0 0;color:var(--muted)}
+.block{padding:18px 0;border-top:1px solid var(--line)}
+.step{font-weight:650}
+.step span{font-weight:400;color:var(--muted)}
+.note{color:var(--muted);font-size:15px}
+.progress{font:13px/1.55 var(--mono);color:var(--faint);margin-top:8px;white-space:pre-wrap;word-break:break-word}
+.item{display:flex;gap:12px;align-items:baseline;margin-top:6px}
+.item small{color:var(--faint);font-family:var(--mono);font-size:13px}
+.plan{display:grid;grid-template-columns:auto auto 1fr;gap:6px 16px;margin-top:10px;align-items:baseline}
+.plan b{font-weight:650}
+.plan .n{color:var(--faint);font-family:var(--mono)}
+.plan small{grid-column:3;color:var(--faint);font-size:14px;margin-top:-6px}
+.wait{display:flex;align-items:center;gap:12px;margin-top:10px;color:var(--muted);font-style:italic}
+.wait .cup{font-size:28px;font-style:normal}
+.answered{font-size:15px;color:var(--muted);margin-top:4px}
+.answered.accepted::before{content:"✓ ";color:var(--good)}
+.answered.declined::before{content:"✗ ";color:var(--faint)}
+.answered.skipped::before{content:"– ";color:var(--faint)}
+.ask{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px 28px;margin:22px 0;box-shadow:0 10px 30px rgba(0,0,0,.06)}
+.ask h2{font-size:22px;line-height:1.3;margin:0 0 6px;letter-spacing:-.01em}
+.ask .meta{color:var(--faint);font-size:14px;font-family:var(--mono)}
+.ask p{margin:14px 0}
+.ask ul{margin:12px 0;padding-left:20px;color:var(--muted)}
+.ask li{margin:6px 0}
+.here{font-style:italic}
+.buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;align-items:center}
+button{font:600 15px var(--sans);border-radius:9px;padding:10px 18px;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button kbd{font:500 12px var(--mono);opacity:.6;margin-left:6px}
+input[type=text],textarea{width:100%;font:16px/1.5 var(--sans);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+textarea{min-height:120px;resize:vertical}
+.repos{display:grid;gap:2px;margin:14px 0;max-height:46vh;overflow:auto}
+.repos label{display:flex;gap:12px;align-items:baseline;padding:7px 8px;border-radius:8px;cursor:pointer}
+.repos label:hover{background:var(--bg)}
+.repos small{color:var(--faint);font-family:var(--mono);font-size:13px;margin-left:auto}
+.overview{list-style:none;padding:0;margin:16px 0}
+.overview li{display:grid;grid-template-columns:2.2em 1fr;gap:4px;padding:6px 0;color:var(--ink)}
+.overview li span{color:var(--faint);font-family:var(--mono);font-size:14px;padding-top:2px}
+.overview li.more{color:var(--faint)}
+.overview small{grid-column:2;color:var(--faint);font-size:13px;font-family:var(--mono)}
+.bar{height:4px;background:var(--line);border-radius:4px;overflow:hidden;margin-bottom:18px}
+.bar i{display:block;height:100%;background:var(--accent)}
+table{border-collapse:separate;border-spacing:6px;margin:12px -6px}
+th{font:500 13px var(--mono);color:var(--muted);text-align:left;padding:0 8px}
+td.rule{padding-right:12px}
+.s{display:inline-block;font:600 13px var(--mono);padding:5px 10px;border-radius:6px;white-space:nowrap}
+.s-yes{background:var(--good-bg);color:var(--good)} .s-partly,.s-missing{background:var(--warn-bg);color:var(--warn)} .s-other{background:var(--na-bg);color:var(--muted)}
+a{color:var(--accent)}
+.error{color:#c0392b}
+</style>
+</head>
+<body>
+<main>
+  <header><h1>CrossCut</h1><p>Cross-cutting concerns, kept visible across your repositories.</p></header>
+  <div id="log"></div>
+  <div id="ask"></div>
+  <div id="done"></div>
+</main>
+<script>
+const REPLAY=window.CROSSCUT_REPLAY||null;
+const $=s=>document.querySelector(s);
+const esc=t=>String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let state={items:[],ask:null,done:null},shownAsk=null,replayAt=0,waitStarted=null;
+
+function renderLog(items){
+  const blocks=[];let cur=null;
+  const open=()=>{cur={html:'',progress:[]};blocks.push(cur);};
+  for(const it of items){
+    if(it.k==='step'||it.k==='plan'||!cur)open();
+    if(it.k==='step')cur.html+=`<div class="step">${esc(it.verb)} <span>${esc(it.t)}</span></div>`;
+    else if(it.k==='plan')cur.html+=`<div class="step">What happens next</div><div class="plan">${it.steps.map((s,i)=>`<span class="n">${i+1}</span><b>${esc(s[0])}</b><span>${esc(s[1])}</span>${s[2]?`<small>${esc(s[2])}</small>`:''}`).join('')}</div>`;
+    else if(it.k==='note')cur.html+=`<div class="note">${esc(it.t)}</div>`;
+    else if(it.k==='item')cur.html+=`<div class="item">${esc(it.name)} <small>${esc(it.t)}</small></div>`;
+    else if(it.k==='wait')cur.html+=`<div class="wait"><span class="cup">☕</span><span>${esc(it.t)}</span></div>`;
+    else if(it.k==='progress')cur.progress.push(it.t);
+    else if(it.k==='answered')cur.html+=`<div class="answered ${it.a}">${esc(it.title)}</div>`;
+    else if(it.k==='summary')cur.html+=`<div class="step" style="margin-top:12px">${it.accepted} accepted <span>${it.declined} declined, ${it.skipped} skipped, of ${it.of}</span></div>`;
+  }
+  return blocks.map(b=>`<div class="block">${b.html}${b.progress.length?`<div class="progress">${b.progress.slice(-4).map(esc).join('\n')}</div>`:''}</div>`).join('');
+}
+
+function renderAsk(a){
+  if(!a)return '';
+  if(a.kind==='yesno')return `<div class="ask"><h2>${esc(a.q)}</h2><div class="buttons"><button class="primary" data-v="true">Yes <kbd>Enter</kbd></button><button data-v="false">No</button></div></div>`;
+  if(a.kind==='repos')return `<div class="ask"><h2>Pull in which?</h2><div class="meta">${a.repos.length?'most recent first':''}</div>
+    <div class="repos">${a.repos.map((r,i)=>`<label><input type="checkbox" value="${i+1}"> ${esc(r.name)} <small>${esc(r.where)}</small></label>`).join('')}</div>
+    <input type="text" id="extra" placeholder="or owner/name, owner/name">
+    <div class="buttons"><button class="primary" id="go">Pull in <kbd>Enter</kbd></button></div></div>`;
+  if(a.kind==='workspace')return `<div class="ask"><h2>Workspace</h2><p class="note">Fresh clones go in a workspace. Your own checkouts are never touched.</p>
+    <input type="text" id="text" value="${esc(a.suggested)}"><div class="buttons"><button class="primary" id="go">Continue <kbd>Enter</kbd></button></div></div>`;
+  if(a.kind==='about')return `<div class="ask"><h2>${esc(a.project)}</h2><div class="meta">what kind of software it is; correct it if it's wrong</div>
+    <p><textarea id="text">${esc(a.draft)}</textarea></p><div class="buttons"><button class="primary" id="go">Keep <kbd>Enter</kbd></button></div></div>`;
+  if(a.kind==='overview')return `<div class="ask"><h2>${a.count} cross-cutting concerns</h2><div class="meta">highest leverage first</div>
+    <ol class="overview">${a.cards.map(c=>c.more?`<li class="more"><span></span>… ${c.more} more …</li>`:`<li><span>${c.n}</span>${esc(c.title)}<small>${esc(c.projects.join(' · '))}</small></li>`).join('')}</ol>
+    <div class="buttons"><button class="primary" id="go">Go through them <kbd>Enter</kbd></button></div></div>`;
+  if(a.kind==='card'){const c=a.card;return `<div class="ask"><div class="bar"><i style="width:${100*a.n/a.of}%"></i></div>
+    <div class="meta">${a.n} of ${a.of} · ${esc(c.projects.join(' · '))}</div><h2>${esc(c.title)}</h2>
+    <p>${esc(c.justification)}</p><ul>${c.stories.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
+    <p class="here">${esc(c.here)}</p>
+    <div class="buttons"><button class="primary" data-a="accept">Accept <kbd>a</kbd></button><button data-a="decline">Decline <kbd>d</kbd></button><button data-a="skip">Skip <kbd>s</kbd></button><button data-a="quit">Stop here</button></div>
+    <div id="why" hidden><p><input type="text" id="reason" placeholder="Why? (optional)"></p><div class="buttons"><button class="primary" id="decline">Decline <kbd>Enter</kbd></button></div></div></div>`;}
+  return '';
+}
+
+function renderDone(d){
+  if(!d)return '';
+  if(d.error)return `<div class="block error">${esc(d.error)}</div>`;
+  if(!d.map)return '';
+  const m=d.map,title=c=>(c.definition.match(/^# (.*)$/m)||[,c.slug])[1];
+  const pill=x=>{const s=x.decided||x.observed||'not reviewed';const k=['yes','partly','missing'].includes(s)?s:'other';return `<span class="s s-${k}">${esc(s)}</span>`;};
+  return `<div class="block"><div class="step">The map</div><table><tr><th></th>${m.projects.map(p=>`<th>${esc(p)}</th>`).join('')}</tr>
+    ${m.concerns.map(c=>`<tr><td class="rule">${esc(title(c))}</td>${c.cells.map(x=>`<td>${pill(x)}</td>`).join('')}</tr>`).join('')}</table>
+    <p><a href="/report" target="_blank">Open the report</a>: every finding, with its file and line.</p></div>`;
+}
+
+function render(){
+  $('#log').innerHTML=renderLog(state.items);
+  $('#done').innerHTML=renderDone(state.done);
+  const id=state.ask?state.ask.id:null;
+  if(id!==shownAsk){shownAsk=id;$('#ask').innerHTML=renderAsk(state.ask);wire();
+    const box=$('#ask .ask');if(box)box.scrollIntoView({block:'center'});
+    const t=$('#ask textarea,#ask input[type=text]');if(t&&!REPLAY)t.focus();}
+  else if(!state.ask&&state.done)$('#done').scrollIntoView({block:'end'});
+  else if(!state.ask)window.scrollTo(0,document.body.scrollHeight);
+}
+
+async function answer(value){
+  const id=state.ask.id;shownAsk=null;$('#ask').innerHTML='';
+  if(REPLAY){advance();return;}
+  await fetch('/answer',{method:'POST',body:JSON.stringify({id,value})});
+  poll();
+}
+function wire(){
+  const a=state.ask;if(!a)return;
+  document.querySelectorAll('#ask [data-v]').forEach(b=>b.onclick=()=>answer(b.dataset.v==='true'));
+  const go=$('#go');
+  if(go)go.onclick=()=>{
+    if(a.kind==='repos'){const picks=[...document.querySelectorAll('.repos input:checked')].map(i=>i.value);answer([...picks,$('#extra').value].join(' '));}
+    else if(a.kind==='overview')answer(null);
+    else answer($('#text').value);
+  };
+  document.querySelectorAll('#ask [data-a]').forEach(b=>b.onclick=()=>{
+    if(b.dataset.a==='decline'){$('#why').hidden=false;$('#reason').focus();return;}
+    answer({a:b.dataset.a});
+  });
+  const d=$('#decline');if(d)d.onclick=()=>answer({a:'decline',reason:$('#reason').value});
+}
+document.addEventListener('keydown',ev=>{
+  const a=state.ask;if(!a)return;
+  const typing=ev.target.matches('input[type=text],textarea');
+  if(a.kind==='card'&&!typing&&!ev.ctrlKey&&!ev.metaKey){const b=$(`#ask [data-a="${{a:'accept',d:'decline',s:'skip'}[ev.key]}"]`);if(b){ev.preventDefault();b.click();return;}}
+  if(ev.key==='Enter'&&!(ev.target.tagName==='TEXTAREA'&&ev.shiftKey)){
+    const target=$('#why:not([hidden]) #decline')||$('#go')||$('#ask [data-v="true"]');
+    if(target){ev.preventDefault();target.click();}
+  }
+});
+
+async function poll(){
+  if(REPLAY)return;
+  try{state=await (await fetch('/state')).json();render();}catch(e){}
+  if(!(state.done&&!state.ask))setTimeout(poll,state.ask?1500:400);
+}
+
+// Replay: step through recorded states, pausing at each question and after a long wait.
+function advance(){
+  const from=REPLAY[replayAt];
+  const fromWaits=from.items.filter(i=>i.k==='wait').length;
+  (function tick(){
+    if(replayAt>=REPLAY.length-1)return;
+    replayAt++;state=REPLAY[replayAt];render();
+    const waits=state.items.filter(i=>i.k==='wait').length;
+    if(state.ask&&state.ask.id!==(from.ask&&from.ask.id))return;
+    if(waits>fromWaits&&!advance.waited){advance.waited=true;return;}
+    setTimeout(tick,state.items.length>from.items.length+40?20:90);
+  })();
+}
+window.crosscutReplayNext=()=>{if(!state.ask)advance();};
+if(REPLAY){state=REPLAY[0];render();}else poll();
+</script>
+</body>
+</html>

@@ -7,10 +7,11 @@ use serde_json::json;
 
 use crate::model;
 
-pub fn write(root: &Path) -> Result<PathBuf, String> {
+/// Every concern against every project, with decisions, observations and findings.
+pub fn data(root: &Path) -> Result<serde_json::Value, String> {
     let projects = model::projects(root)?;
     let concerns = model::concerns(root)?;
-    let data = json!({
+    Ok(json!({
         "projects": projects.iter().map(|p| &p.name).collect::<Vec<_>>(),
         "concerns": concerns.iter().map(|c| {
             let observed = c.observations();
@@ -36,8 +37,11 @@ pub fn write(root: &Path) -> Result<PathBuf, String> {
             })
         }).collect::<Vec<_>>(),
         "declined": std::fs::read_to_string(root.join("crosscut/declined.md")).ok(),
-    });
-    let data = data.to_string().replace("</", "<\\/");
+    }))
+}
+
+pub fn write(root: &Path) -> Result<PathBuf, String> {
+    let data = data(root)?.to_string().replace("</", "<\\/");
     let path = root.join("crosscut/report.html");
     crate::unpack::write(&path, &PAGE.replace("/*DATA*/null", &data))?;
     Ok(path)
