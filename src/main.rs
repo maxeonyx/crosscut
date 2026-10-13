@@ -736,15 +736,36 @@ fn welcome() -> Result<ExitCode, String> {
 
     let here =
         std::env::current_dir().map_err(|e| format!("cannot read current directory: {e}"))?;
-    // The list may scroll off the top, under a header nobody needs to read. What must be read
-    // sits at the bottom, next to the prompt, and number 1, the most recently used repository,
-    // is nearest to it.
-    let repos = workspace::find(&here, 3);
     eprintln!(
         "{}  {}\n",
         style::bold("CrossCut"),
         style::dim("cross-cutting concerns, kept visible across your repositories")
     );
+    let suggested = here.join("crosscut-workspace");
+    if suggested.join("crosscut").is_dir() {
+        eprintln!(
+            "{}\n",
+            style::dim(&format!(
+                "You already have a workspace. To carry on in it: cd {} && crosscut",
+                tilde(&suggested)
+            ))
+        );
+    }
+    let harness = Harness::resolve(None);
+    // Ask before looking. The list may then scroll off the top; number 1, the most recently
+    // used repository, sits nearest the prompt.
+    let search = format!(
+        "Search for git repos under {}/ ?",
+        tilde(&here).trim_end_matches('/')
+    );
+    let repos = if unpack::confirm(&mut input, &search) {
+        workspace::find(&here, 3)
+    } else {
+        Vec::new()
+    };
+    if !repos.is_empty() {
+        eprintln!();
+    }
     for (i, repo) in repos.iter().enumerate().rev() {
         let clones = match repo.clones.len() {
             1 => tilde(&repo.clones[0]),
@@ -757,38 +778,8 @@ fn welcome() -> Result<ExitCode, String> {
             style::dim(&clones)
         );
     }
-    let suggested = here.join("crosscut-workspace");
-    let harness = Harness::resolve(None);
-    // One line per paragraph: the terminal wraps them to its own width.
-    eprintln!(
-        "\n\n{}  {}\n\n\
-         Pick the repositories to look at{}. They are cloned fresh into {}, and your own checkouts are never touched. Then {} proposes cross-cutting concerns, and reviews your code for the ones you accept.\n\n\
-         {}",
-        style::bold("CrossCut"),
-        style::dim("cross-cutting concerns, kept visible across your repositories"),
-        if repos.is_empty() {
-            format!(
-                ", as owner/name {}",
-                style::dim(&format!("(none found in {} or three levels below)", tilde(&here)))
-            )
-        } else {
-            format!(" {}", style::dim("(1 is the one you used last)"))
-        },
-        style::accent(&tilde(&suggested)),
-        match &harness {
-            Ok(h) => format!("your coding agent, {},", style::accent(h.name())),
-            Err(_) => "a coding agent (none found: install and log in to claude, codex or opencode)".into(),
-        },
-        style::dim("To use checkouts in place instead: crosscut unpack ~/src/api ~/src/web"),
-    );
-    if suggested.join("crosscut").is_dir() {
-        eprintln!(
-            "{}",
-            style::dim(&format!(
-                "You already have a workspace there. To carry on in it: cd {} && crosscut",
-                tilde(&suggested)
-            ))
-        );
+    if let Err(e) = &harness {
+        eprintln!("\n{e}");
     }
     harness?;
     let chosen = workspace::choose(&mut input, &repos);
@@ -796,8 +787,10 @@ fn welcome() -> Result<ExitCode, String> {
         return Ok(ExitCode::SUCCESS);
     }
     eprint!(
-        "\n{} {} > ",
-        style::bold("Workspace directory"),
+        "\n{} {}\n{} {} > ",
+        style::dim("Fresh clones go in a workspace."),
+        style::dim("Your own checkouts are never touched."),
+        style::bold("Workspace"),
         style::dim(&format!("[{}]", tilde(&suggested)))
     );
     let _ = std::io::Write::flush(&mut std::io::stderr());
@@ -888,7 +881,7 @@ fn unpack_concerns(
         None => {
             let harness = Harness::resolve(run.harness.clone())?;
             let timeout = Duration::from_secs(run.timeout);
-            eprintln!("{}", unpack::what_happens());
+            eprintln!("{}", unpack::what_happens(harness.name()));
             // Unpacking works from short descriptions, never from the code.
             let mut about = Vec::new();
             for project in &projects {

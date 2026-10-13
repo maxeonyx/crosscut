@@ -41,7 +41,7 @@ impl Harness {
             Harness::Claude => "claude",
             Harness::Codex => "codex",
             Harness::OpenCode => "opencode",
-            Harness::Shell(command) => command,
+            Harness::Shell(_) => "your --harness command",
         }
     }
 

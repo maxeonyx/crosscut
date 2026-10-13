@@ -104,7 +104,7 @@ pub fn prompt(
 }
 
 /// What `crosscut unpack` is about to do, shown before it starts.
-pub fn what_happens() -> String {
+pub fn what_happens(agent: &str) -> String {
     let step = |n: &str, verb: &str, what: &str, note: &str| {
         format!(
             "  {}  {}  {}  {}\n",
@@ -126,7 +126,10 @@ pub fn what_happens() -> String {
         step(
             "2",
             "Unpack",
-            "cross-cutting concerns for software like it",
+            &format!(
+                "cross-cutting concerns for software like it, with {}",
+                style::accent(agent)
+            ),
             "a few minutes; never sees your code"
         ),
         step(

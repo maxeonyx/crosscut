@@ -132,7 +132,11 @@ pub fn choose(input: &mut impl BufRead, repos: &[Repo]) -> Vec<(String, String)>
         eprint!(
             "\n{} {} > ",
             style::bold("Pull in which?"),
-            style::dim("numbers such as 1 3, or owner/name")
+            style::dim(if repos.is_empty() {
+                "owner/name"
+            } else {
+                "numbers (1 is the most recent), or owner/name"
+            })
         );
         let _ = std::io::stderr().flush();
         let mut line = String::new();
