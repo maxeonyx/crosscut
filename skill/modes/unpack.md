@@ -30,6 +30,8 @@ Write each candidate the way a concern is written: from a concrete story, back t
 
 For each candidate, name the concept a computer scientist would use: ownership and lifetimes, parsing at the boundary, monotonic time, idempotency, staleness. State the rule at that level. Then test it: in a different project of a different kind, would a review for this rule find things? If not, climb. Stop before it turns vague: "resources should be handled correctly" finds nothing. The seeds are the right height.
 
+**General, but never contorted: name things by their everyday names.** Being generic does not mean giving up being concrete. A reader who already knows the thing must understand the rule on first reading, without parsing it. Unfamiliar words are fine, because the justification explains them. Abstract paraphrase is not. If the thing has a name ("signing keys", "time zones", "retries", "the cache"), use the name. In Max's words, about a card titled "The identity that authorises updates should outlive the machine that builds them": "'Android app signing keys' is perfectly fine! Or just 'Signing keys'. While we are trying to be *generic*, we don't want to forgo being *concrete*. We shan't contort our speech." Write "Signing keys should not exist only on the machine that builds", not "the identity that authorises updates".
+
 Merge candidates that are the same rule. A rule that applies to several of the projects is worth more than one that applies to a single project.
 
 ## 3. Filter hard

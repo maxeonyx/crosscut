@@ -246,7 +246,10 @@ Design each concern this way:
    - still literally true.
 
    The rule states a principle, never a fact. It is hedged only where it has
-   real exceptions.
+   real exceptions. It names things by their everyday names: "signing keys",
+   not "the identity that authorises updates". Generic does not mean
+   abstract. A reader who knows the thing understands the rule on first
+   reading; a reader who doesn't is helped by the justification.
 4. Justify the rule in the academic language, and make it concrete with
    several stories. The stories say why it wasn't already done, whether others
    have thought of it, whether a builder would find it condescending, and where
