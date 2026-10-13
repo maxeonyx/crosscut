@@ -174,21 +174,31 @@ agents, operators. That sets two boundaries.
 
 ### What is worth raising: a story, a generic concern, a concrete instance
 
-Raise a concern when it has all three:
-1. **A concrete story it affects:** your best guess at a real use case the
-   current system does not cover. The person can be a user, but it will often
-   be a developer, because the person reading is most likely a developer. It
-   can be ops, support, or anyone else. The story motivates.
+A concern comes to have all three, in two steps:
+1. **A concrete story it affects:** a real use case that software of this kind
+   tends not to cover. The person can be a user, but it will often be a
+   developer, because the person reading is most likely a developer. It can be
+   ops, support, or anyone else. The story motivates.
 2. **A generic concern:** the question in a form that is useful beyond this one
    case. It is what sells the value of keeping the question visible.
-3. **A concrete instance discovered here:** a reason to act now.
+3. **A concrete instance found here:** a reason to act now.
+
+Proposing a concern gives it the first two, from a description of the
+software and nothing more. Only a review of the code gives it the third.
+Proposing is unpacking: the agent knows the landscape of software engineering
+concerns, and applies it to a domain it is told about without seeing the code,
+keeping each concern general. In Max's words: "The point is, I don't have the
+knowledge, but the agent does. You do. As Claude, you know all of the stuff,
+and I want to get it out of you without knowing the context you're going to be
+applied to."
 
 Not "should `berth-desk` tell an open tab that it is stale?", which reads as a
 bug. Instead:
 - the story: a marina office leaves the tab open for weeks, and after a deploy
   its old code writes bookings the new API misreads;
 - the generic concern: can a long-running client tell that it is out of date?
-- the instance: `berth-desk` cannot, and neither can the kiosk app.
+- the instance, found by review: `berth-desk` cannot, and neither can the
+  kiosk app.
 
 A concern should generalise: it should obviously be valuable to other
 projects, not only this one. Judge that across software in general, not by how
