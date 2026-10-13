@@ -8,6 +8,7 @@
 
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -240,42 +241,59 @@ pub fn run(
     let started = Instant::now();
     let mut steps = 0;
     let mut result: Option<Result<String, String>> = None;
-    let out = harness::run_streaming(cmd, stdin.then_some(prompt), timeout, |line| {
-        if !claude {
-            return;
-        }
-        let Ok(event) = serde_json::from_str::<serde_json::Value>(line) else {
-            return;
-        };
-        match event["type"].as_str() {
-            Some("assistant") => {
-                for block in event["message"]["content"].as_array().into_iter().flatten() {
-                    if block["type"] == "tool_use" {
-                        steps += 1;
-                        eprintln!(
-                            "  {:>4}s  {}",
-                            started.elapsed().as_secs(),
-                            describe_tool(block, projects)
-                        );
-                    }
+    // Seconds since the start at which something was last shown, so a long silent think
+    // still shows it is alive.
+    let shown = AtomicU64::new(0);
+    let finished = AtomicBool::new(false);
+    let out = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            while !finished.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(200));
+                let now = started.elapsed().as_secs();
+                if now >= shown.load(Ordering::Relaxed) + 30 {
+                    eprintln!("  {now:>4}s  still thinking");
+                    shown.store(now, Ordering::Relaxed);
                 }
             }
-            Some("result") => {
-                let text = event["result"].as_str().unwrap_or_default().to_string();
-                result = Some(if event["is_error"] == true {
-                    Err(format!("the agent failed: {text}"))
-                } else {
-                    Ok(text)
-                });
+        });
+        let out = harness::run_streaming(cmd, stdin.then_some(prompt), timeout, |line| {
+            if !claude {
+                return;
             }
-            _ => {}
-        }
+            let Ok(event) = serde_json::from_str::<serde_json::Value>(line) else {
+                return;
+            };
+            match event["type"].as_str() {
+                Some("assistant") => {
+                    for block in event["message"]["content"].as_array().into_iter().flatten() {
+                        if block["type"] == "tool_use" {
+                            steps += 1;
+                            let now = started.elapsed().as_secs();
+                            eprintln!("  {now:>4}s  {}", describe_tool(block, projects));
+                            shown.store(now, Ordering::Relaxed);
+                        }
+                    }
+                }
+                Some("result") => {
+                    let text = event["result"].as_str().unwrap_or_default().to_string();
+                    result = Some(if event["is_error"] == true {
+                        Err(format!("the agent failed: {text}"))
+                    } else {
+                        Ok(text)
+                    });
+                }
+                _ => {}
+            }
+        });
+        finished.store(true, Ordering::Relaxed);
+        out
     })?;
     if claude {
-        eprintln!(
-            "  {:>4}s  done, after {steps} steps",
-            started.elapsed().as_secs()
-        );
+        let secs = started.elapsed().as_secs();
+        match steps {
+            0 => eprintln!("  {secs:>4}s  done"),
+            n => eprintln!("  {secs:>4}s  done, after {n} steps"),
+        }
         return result.unwrap_or_else(|| Err("the agent finished without a result".into()));
     }
     Ok(out)
