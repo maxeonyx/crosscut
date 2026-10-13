@@ -130,8 +130,11 @@ pub fn order_prompt(cards: &[Card], about: &[(String, String)], projects: &[Proj
     let cards: String = cards
         .iter()
         .map(|c| {
-            let here: Vec<String> =
-                c.here.iter().map(|h| format!("{}: {}", h.project, h.story)).collect();
+            let here: Vec<String> = c
+                .here
+                .iter()
+                .map(|h| format!("{}: {}", h.project, h.story))
+                .collect();
             format!("- `{}`: {}. {}\n", c.slug, c.title, here.join(" "))
         })
         .collect();
@@ -159,8 +162,6 @@ pub fn order_prompt(cards: &[Card], about: &[(String, String)], projects: &[Proj
     )
 }
 
-/// The order in an agent's reply, as indices into `cards`. Anything but a reordering of
-/// exactly these cards is refused.
 /// The prompt that rewords unpacked cards whose titles do not read at first sight, or drops
 /// them. Its answer can only change titles.
 pub fn reword_prompt(cards: &[Card]) -> String {
@@ -230,6 +231,8 @@ pub fn parse_reword(reply: &str, cards: &[Card]) -> Result<Vec<Card>, String> {
     Ok(kept)
 }
 
+/// The order in an agent's reply, as indices into `cards`. Anything but a reordering of
+/// exactly these cards is refused.
 pub fn parse_order(reply: &str, cards: &[Card]) -> Result<Vec<usize>, String> {
     let start = reply
         .rfind(ORDER_OPEN)
@@ -291,29 +294,47 @@ pub fn parse(reply: &str) -> Result<Landscape, String> {
     serde_json::from_str(body).map_err(|e| format!("the agent's cards are not valid JSON: {e}"))
 }
 
-/// Runs the agent in `dir`, showing what it looks at as it goes, and returns its final reply.
-/// It may read the projects in `access`; with none, a Claude agent gets no tools at all.
+/// What an agent may do with the projects.
+#[derive(Clone, Copy)]
+pub enum Tools<'a> {
+    /// Nothing: it answers from the prompt alone.
+    None,
+    /// Read them.
+    Read(&'a [Project]),
+    /// Read them, and write in its working directory.
+    Write(&'a [Project]),
+}
+
+/// Runs the agent, set up by `prepare`, passing what it looks at to `progress` as it goes,
+/// and returns its final reply.
 pub fn run(
     progress: &(dyn Fn(&str) + Sync),
     harness: &Harness,
     prompt: &str,
     model: Option<&str>,
     prepare: &dyn Fn(&mut Command),
-    access: &[Project],
+    tools: Tools,
     timeout: Duration,
 ) -> Result<String, String> {
-    let (mut cmd, stdin) = harness.command(prompt, model)?;
+    let (projects, write) = match tools {
+        Tools::None => (&[][..], false),
+        Tools::Read(p) => (p, false),
+        Tools::Write(p) => (p, true),
+    };
+    let (mut cmd, stdin) = harness.command(prompt, model, write)?;
     prepare(&mut cmd);
     let claude = matches!(harness, Harness::Claude);
     if claude {
         cmd.args(["--output-format", "stream-json", "--verbose"]);
-        if access.is_empty() {
-            cmd.args(["--tools", ""]);
-        } else {
-            cmd.arg("--add-dir").args(access.iter().map(|p| &p.dir));
+        match tools {
+            Tools::None => {
+                cmd.args(["--tools", ""]);
+            }
+            _ => {
+                cmd.arg("--add-dir").args(projects.iter().map(|p| &p.dir));
+            }
         }
     }
-    let projects = access;
     let started = Instant::now();
     let mut steps = 0;
     let mut result: Option<Result<String, String>> = None;
@@ -392,8 +413,7 @@ fn describe_tool(block: &serde_json::Value, projects: &[Project]) -> String {
     format!("{name:<5} {detail}")
 }
 
-/// The concern directory for an accepted card: its definition, and a prompt check that
-/// reviews a project for it.
+/// The concern directory for an accepted card, holding its definition.
 pub fn accept(root: &Path, card: &Card, today: &str) -> Result<PathBuf, String> {
     let dir = root.join("crosscut/concerns").join(&card.slug);
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
@@ -405,20 +425,10 @@ pub fn accept(root: &Path, card: &Card, today: &str) -> Result<PathBuf, String> 
         .collect();
     let definition = format!(
         "# {}\n\n{}\n\n## Stakeholder stories\n\n{stories}\n## Here\n\n{here}\n\
-         Accepted {today}.\n\n## Decisions\n",
-        card.title, card.justification
-    );
-    let check = format!(
-        "Review this project against the rule in the concern, as a reviewer who wants every \
-         real instance and no false ones. Where the concern says the rule does not apply, \
-         respect that.\n\n{}\n\n\
-         Status: `yes` when the rule holds everywhere it applies, `partly` when it holds in \
-         some places and not others, `missing` when it does not hold where it matters most, \
-         `n/a` when the rule has nothing to apply to in this project.\n",
-        card.how_to_review
+         ## How to review\n\n{}\n\nAccepted {today}.\n\n## Decisions\n",
+        card.title, card.justification, card.how_to_review
     );
     write(&dir.join("concern.md"), &definition)?;
-    write(&dir.join("check.md"), &check)?;
     Ok(dir)
 }
 

@@ -233,7 +233,7 @@ fn check_runs_machine_tiers_and_writes_sorted_observations() {
         "{out}"
     );
     assert!(
-        err.contains("recoverable-state: prompt check not run (add --agentic"),
+        err.contains("recoverable-state: agent review not run (add --agentic"),
         "{err}"
     );
     assert!(
@@ -723,6 +723,9 @@ Thinking out loud first.
 </crosscut-cards>
 JSON
 ;;
+*'Recommend how each cross-cutting concern'*) printf '<crosscut-tiers>\nas-of: custom: the cache sets a timestamp\nlog-once: prompt: needs judgment\n</crosscut-tiers>\n';;
+*'Write `check.md`'*) echo 'Look for log calls in except blocks.' > check.md; echo 'Wrote check.md';;
+*'Write `check`'*) printf '#!/bin/sh\necho "yes: the cache sets a timestamp"\n' > check; echo 'Wrote check';;
 *) echo '<crosscut-findings>
 - `src/repo.py:12` logs then re-raises; drop the log line.
 </crosscut-findings>
@@ -812,17 +815,18 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
         "{definition}"
     );
     assert!(definition.contains("## Decisions"), "{definition}");
-    let check = fs::read_to_string(concern.join("check.md")).unwrap();
     assert!(
-        check.contains("Search for log calls inside except blocks"),
-        "{check}"
+        definition.contains("## How to review\n\nSearch for log calls inside except blocks"),
+        "{definition}"
+    );
+    assert!(
+        !concern.join("check.md").exists(),
+        "the first review is ephemeral: nothing is built until the person asks"
     );
 
     let declined = fs::read_to_string(dir.join("crosscut/declined.md")).unwrap();
     assert!(
-        declined.contains(
-            "- Derived data should say how old it is: we already show refresh times"
-        ),
+        declined.contains("- Derived data should say how old it is: we already show refresh times"),
         "{declined}"
     );
     assert!(!dir.join("crosscut/concerns/as-of").exists());
@@ -901,7 +905,10 @@ fn saved_cards_float_again_without_an_agent_minus_those_already_kept() {
     // Decline the first card, accept the second, which is reviewed.
     unpack(dir, &["api"], "\n\nd\n\na\n");
     let (_, err) = unpack(dir, &["--cards", "crosscut/landscape.json"], "\ns\n");
-    assert!(err.contains("1/1  Derived data should say how old it is"), "{err}");
+    assert!(
+        err.contains("1/1  Derived data should say how old it is"),
+        "{err}"
+    );
     assert_eq!(
         fs::read_dir(dir.join("prompts")).unwrap().count(),
         5,
@@ -1021,12 +1028,13 @@ fn the_browser_asks_the_same_questions_and_ends_on_the_map() {
 
     let mut kinds = Vec::new();
     let deadline = Instant::now() + Duration::from_secs(30);
-    let done = loop {
+    let items = loop {
         assert!(Instant::now() < deadline, "asked: {kinds:?}");
         let state: serde_json::Value =
             serde_json::from_str(&http(&url, "GET", "/state", "")).unwrap();
-        if let Some(done) = state["done"].as_object().filter(|_| state["ask"].is_null()) {
-            break done.clone();
+        if state["done"].is_object() && state["ask"].is_null() {
+            assert!(state["done"]["error"].is_null(), "{state}");
+            break state["items"].as_array().unwrap().clone();
         }
         let ask = &state["ask"];
         if ask.is_null() || kinds.last() == Some(&ask["id"].to_string()) {
@@ -1042,6 +1050,9 @@ fn the_browser_asks_the_same_questions_and_ends_on_the_map() {
             "about" => ask["draft"].clone(),
             "overview" => serde_json::Value::Null,
             "card" => serde_json::json!({"a": "accept"}),
+            // Make them permanent, as recommended.
+            "permanent" => serde_json::json!(true),
+            "tiers" => serde_json::Value::Null,
             other => panic!("unexpected question {other}"),
         };
         http(
@@ -1054,8 +1065,18 @@ fn the_browser_asks_the_same_questions_and_ends_on_the_map() {
     let report = http(&url, "GET", "/report", "");
     let _ = child.kill();
     let _ = child.wait();
-    let map = &done["map"];
-    assert_eq!(map["projects"], serde_json::json!(["api"]), "{done:?}");
+    let maps: Vec<&serde_json::Value> = items
+        .iter()
+        .filter(|i| i["k"] == "map")
+        .map(|i| &i["map"])
+        .collect();
+    assert_eq!(
+        maps.len(),
+        2,
+        "the map after the review, and after building"
+    );
+    let map = maps[0];
+    assert_eq!(map["projects"], serde_json::json!(["api"]), "{map}");
     let slugs: Vec<&str> = map["concerns"]
         .as_array()
         .unwrap()
@@ -1068,6 +1089,11 @@ fn the_browser_asks_the_same_questions_and_ends_on_the_map() {
         "both cards were accepted and reviewed"
     );
     assert_eq!(map["concerns"][0]["cells"][0]["observed"], "partly");
+    // Built as recommended: a script for as-of, now free to run, and a prompt for log-once.
+    let built = maps[1];
+    assert_eq!(built["concerns"][0]["check"], "script");
+    assert_eq!(built["concerns"][0]["cells"][0]["observed"], "yes");
+    assert_eq!(built["concerns"][1]["check"], "prompt");
     assert!(report.contains("Each error should be logged once"));
     let workspace = home.path().join("crosscut-workspace");
     assert!(

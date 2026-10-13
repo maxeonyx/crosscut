@@ -11,6 +11,7 @@ use std::sync::{Arc, Condvar, Mutex};
 
 use serde_json::{json, Value};
 
+use crate::build::{Recommendation, Tier};
 use crate::ui::{plan_steps, Say, Ui};
 use crate::unpack::{Answer, Card};
 use crate::workspace::{parse_choice, Repo};
@@ -291,9 +292,39 @@ impl Ui for Browser {
         let report = crate::report::write(root)?;
         let data = crate::report::data(root)?;
         self.shared.change(|s| {
-            s.done = Some(json!({ "map": data }));
+            s.items.push(json!({ "k": "map", "map": data }));
             s.report = Some(report);
         });
         Ok(())
+    }
+
+    fn permanent(&self) -> bool {
+        let options: Vec<Value> = Tier::ALL
+            .iter()
+            .map(|t| json!([t.label(), t.meaning()]))
+            .collect();
+        self.ask(json!({ "kind": "permanent", "q": crate::ui::PERMANENT,
+                         "lead": crate::ui::PERMANENT_LEAD, "options": options }))
+            == json!(true)
+    }
+
+    fn tiers(&self, recommended: &[Recommendation]) -> Vec<Option<Tier>> {
+        let recs: Vec<Value> = recommended
+            .iter()
+            .map(|r| json!({ "title": r.title, "tier": r.tier.key(), "why": r.why }))
+            .collect();
+        let options: Vec<Value> = Tier::ALL
+            .iter()
+            .map(|t| json!([t.key(), t.label()]))
+            .collect();
+        let answer = self.ask(json!({ "kind": "tiers", "recs": recs, "options": options }));
+        recommended
+            .iter()
+            .enumerate()
+            .map(|(i, r)| match answer.get(i).and_then(Value::as_str) {
+                Some(key) => Tier::parse(key),
+                None => Some(r.tier),
+            })
+            .collect()
     }
 }

@@ -40,6 +40,14 @@ header p{margin:4px 0 0;color:var(--muted)}
 .ask ul{margin:12px 0;padding-left:20px;color:var(--muted)}
 .ask li{margin:6px 0}
 .ask h3{font-size:15px;margin:20px 0 0}
+.options{list-style:none;padding:0}
+.options li{margin:10px 0}
+.options b{font-weight:600;color:var(--ink);margin-right:10px}
+.tier{border-top:1px solid var(--line);margin-top:16px}
+.tier .why{color:var(--muted);margin:4px 0 8px;font-size:15px}
+.choices{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:15px}
+.choices label{cursor:pointer}
+.free{font:500 12px var(--mono);color:var(--good);background:var(--good-bg);border-radius:5px;padding:2px 6px;margin-left:6px;white-space:nowrap}
 .ask .here li{list-style:none;margin-left:-20px}
 .ask .here b{font-weight:600;color:var(--ink);margin-right:8px}
 .buttons{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;align-items:center}
@@ -90,7 +98,7 @@ let state={items:[],ask:null,done:null},shownAsk=null,replayAt=0;
 
 // Lines are revealed one at a time, each held long enough to read, and a question waits until
 // everything before it has been shown. `target` is the latest state; `state` is what is shown.
-const DWELL={cell:200,plan:2500,note:1200,wait:1200,summary:1200,step:900,item:500,answered:300,progress:60};
+const DWELL={map:3000,cell:200,plan:2500,note:1200,wait:1200,summary:1200,step:900,item:500,answered:300,progress:60};
 let target=state,shown=0,pacing=false,answered=null;
 function show(){
   const all=shown>=target.items.length;
@@ -112,7 +120,8 @@ function renderLog(items){
   const blocks=[];let cur=null;
   const open=()=>{cur={html:'',progress:[]};blocks.push(cur);};
   for(const it of items){
-    if(it.k==='step'||it.k==='plan'||!cur)open();
+    if(it.k==='step'||it.k==='plan'||it.k==='map'||!cur)open();
+    if(it.k==='map')cur.html+=renderMap(it.map);
     if(it.k==='step')cur.html+=`<div class="step">${esc(it.verb)} <span>${esc(it.t)}</span></div>`;
     else if(it.k==='plan')cur.html+=`<div class="step">What happens next</div><div class="plan">${it.steps.map((s,i)=>`<span class="n">${i+1}</span><b>${esc(s[0])}</b><span>${esc(s[1])}</span>${s[2]?`<small>${esc(s[2])}</small>`:''}`).join('')}</div>`;
     else if(it.k==='note')cur.html+=`<div class="note">${esc(it.t)}</div>`;
@@ -142,6 +151,13 @@ const statusPill=s=>{const k=['yes','partly','missing'].includes(s)?s:'other';re
 
 function renderAsk(a){
   if(!a)return '';
+  if(a.kind==='permanent')return `<div class="ask"><h2>${esc(a.q)}</h2><p>${esc(a.lead)}</p>
+    <ul class="options">${a.options.map(([l,m])=>`<li><b>${esc(l)}</b><small>${esc(m)}</small></li>`).join('')}</ul>
+    <div class="buttons"><button class="primary" data-v="true">Yes <kbd>Enter</kbd></button><button data-v="false">No</button></div></div>`;
+  if(a.kind==='tiers')return `<div class="ask"><h2>A check for each</h2><div class="meta">recommended; change any</div>
+    ${a.recs.map((r,i)=>`<div class="tier"><h3>${esc(r.title)}</h3><p class="why">${esc(r.why)}</p><div class="choices">
+      ${[...a.options,['skip','Nothing']].map(([k,l])=>`<label><input type="radio" name="t${i}" value="${k}"${k===r.tier?' checked':''}> ${esc(l)}</label>`).join('')}</div></div>`).join('')}
+    <div class="buttons"><button class="primary" id="go">Build <kbd>Enter</kbd></button></div></div>`;
   if(a.kind==='yesno')return `<div class="ask"><h2>${esc(a.q)}</h2><div class="buttons"><button class="primary" data-v="true">Yes <kbd>Enter</kbd></button><button data-v="false">No</button></div></div>`;
   if(a.kind==='repos')return `<div class="ask"><h2>Pull in which?</h2><div class="meta">${a.repos.length?'most recent first':''}</div>
     <div class="repos">${a.repos.map((r,i)=>`<label><input type="checkbox" value="${i+1}"> ${esc(r.name)} <small>${esc(r.where)}</small></label>`).join('')}</div>
@@ -165,14 +181,18 @@ function renderAsk(a){
 }
 
 function renderDone(d){
-  if(!d)return '';
-  if(d.error)return `<div class="block error">${esc(d.error)}</div>`;
-  if(!d.map)return '';
-  const m=d.map,title=c=>(c.definition.match(/^# (.*)$/m)||[,c.slug])[1];
+  return d&&d.error?`<div class="block error">${esc(d.error)}</div>`:'';
+}
+
+// The map: a row per cross-cutting concern, a column per project. A row checked by a script
+// costs no tokens, and says so.
+function renderMap(m){
+  const title=c=>(c.definition.match(/^# (.*)$/m)||[,c.slug])[1];
   const pill=x=>statusPill(x.decided||x.observed||'not reviewed');
-  return `<div class="block"><div class="step">The map</div><table><tr><th></th>${m.projects.map(p=>`<th>${esc(p)}</th>`).join('')}</tr>
-    ${m.concerns.map(c=>`<tr><td class="rule">${esc(title(c))}</td>${c.cells.map(x=>`<td>${pill(x)}</td>`).join('')}</tr>`).join('')}</table>
-    <p><a href="/report" target="_blank">Open the report</a>: every finding, with its file and line.</p></div>`;
+  const tag=c=>c.check==='script'?' <span class="free">0 tokens</span>':'';
+  return `<div class="step">The map</div><table><tr><th></th>${m.projects.map(p=>`<th>${esc(p)}</th>`).join('')}</tr>
+    ${m.concerns.map(c=>`<tr><td class="rule">${esc(title(c))}${tag(c)}</td>${c.cells.map(x=>`<td>${pill(x)}</td>`).join('')}</tr>`).join('')}</table>
+    <p><a href="/report" target="_blank">Open the report</a>: every finding, with its file and line.</p>`;
 }
 
 function render(){
@@ -200,6 +220,7 @@ function wire(){
   if(go)go.onclick=()=>{
     if(a.kind==='repos'){const picks=[...document.querySelectorAll('.repos input:checked')].map(i=>i.value);answer([...picks,$('#extra').value].join(' '));}
     else if(a.kind==='overview')answer(null);
+    else if(a.kind==='tiers')answer(a.recs.map((_,i)=>($(`input[name=t${i}]:checked`)||{}).value||'skip'));
     else answer($('#text').value);
   };
   document.querySelectorAll('#ask [data-a]').forEach(b=>b.onclick=()=>{

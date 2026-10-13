@@ -6,6 +6,7 @@ use std::io::{BufRead, IsTerminal, Write};
 use std::path::Path;
 use std::time::Duration;
 
+use crate::build::{Recommendation, Tier};
 use crate::style;
 use crate::unpack::{Answer, Card};
 use crate::workspace::Repo;
@@ -59,7 +60,14 @@ pub trait Ui: Sync {
     fn card(&self, card: &Card, n: usize, of: usize) -> Answer;
     /// The reviews are done: the map and report are in `root`.
     fn finished(&self, root: &Path) -> Result<(), String>;
+    /// Whether to make the accepted cross-cutting concerns' checks permanent.
+    fn permanent(&self) -> bool;
+    /// The check to build for each, starting from the recommendation; `None` builds nothing.
+    fn tiers(&self, recommended: &[Recommendation]) -> Vec<Option<Tier>>;
 }
+
+pub const PERMANENT: &str = "Make these checks permanent?";
+pub const PERMANENT_LEAD: &str = "Each cross-cutting concern you accepted gets whichever of these suits it best, so checking it again costs little or nothing:";
 
 /// The terminal: questions on stderr, answers from stdin, one line each.
 pub struct Terminal;
@@ -295,7 +303,10 @@ impl Ui for Terminal {
         }
         out += &format!("\n  {}\n", style::bold("Here"));
         for here in &card.here {
-            out += &line(&format!("  {}  ", style::italic(&here.project)), &here.story);
+            out += &line(
+                &format!("  {}  ", style::italic(&here.project)),
+                &here.story,
+            );
         }
         eprint!("{out}");
         let key = |k: &str, rest: &str| format!("{}{}", style::accent(&style::bold(k)), rest);
@@ -320,6 +331,72 @@ impl Ui for Terminal {
                     return Answer::Decline(reason.trim().to_string());
                 }
                 _ => {}
+            }
+        }
+    }
+
+    fn permanent(&self) -> bool {
+        eprintln!(
+            "\n\n{}\n{}\n",
+            style::bold(PERMANENT),
+            style::dim(PERMANENT_LEAD)
+        );
+        for tier in Tier::ALL {
+            eprintln!(
+                "  {}  {}",
+                style::bold(tier.label()),
+                style::dim(tier.meaning())
+            );
+        }
+        eprint!("\n{} > ", style::dim("[Y/n]"));
+        read_line().is_some_and(|l| !l.trim().to_lowercase().starts_with('n'))
+    }
+
+    fn tiers(&self, recommended: &[Recommendation]) -> Vec<Option<Tier>> {
+        let mut chosen: Vec<Option<Tier>> = recommended.iter().map(|r| Some(r.tier)).collect();
+        loop {
+            eprintln!();
+            for (i, (r, tier)) in recommended.iter().zip(&chosen).enumerate() {
+                eprintln!(
+                    "  {}  {}",
+                    style::dim(&(i + 1).to_string()),
+                    style::bold(&r.title)
+                );
+                match tier {
+                    Some(t) if *t == r.tier => {
+                        eprintln!("     {}  {}", t.label(), style::dim(&r.why))
+                    }
+                    Some(t) => eprintln!("     {}", t.label()),
+                    None => eprintln!("     {}", style::dim("nothing")),
+                }
+            }
+            eprint!(
+                "\n{} > ",
+                style::dim(
+                    "Enter to build these, or change one: 2 tool, 2 custom, 2 prompt, 2 skip"
+                )
+            );
+            let Some(line) = read_line() else {
+                return vec![None; recommended.len()];
+            };
+            let words: Vec<&str> = line.split_whitespace().collect();
+            match words[..] {
+                [] => return chosen,
+                [n, key] => match (n.parse::<usize>(), Tier::parse(key), key) {
+                    (Ok(n), tier, _)
+                        if (1..=chosen.len()).contains(&n) && (tier.is_some() || key == "skip") =>
+                    {
+                        chosen[n - 1] = tier
+                    }
+                    _ => eprintln!(
+                        "  A number from 1 to {}, then tool, custom, prompt or skip.",
+                        chosen.len()
+                    ),
+                },
+                _ => eprintln!(
+                    "  A number from 1 to {}, then tool, custom, prompt or skip.",
+                    chosen.len()
+                ),
             }
         }
     }

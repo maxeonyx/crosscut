@@ -4,6 +4,7 @@
 //! The model is in docs/design.md: observations (written here) are kept apart from
 //! decisions (written by people, in each concern.md), and the map is computed from both.
 
+mod build;
 mod harness;
 mod model;
 mod report;
@@ -430,7 +431,11 @@ impl Runner {
                     .unwrap_or("");
                 parse_cell(line).map(|(status, evidence)| (status, evidence, None))
             }
-            Mechanism::Prompt(check) => {
+            Mechanism::Prompt(_) | Mechanism::Review => {
+                let check = match mechanism {
+                    Mechanism::Prompt(check) => Some(check.as_str()),
+                    _ => None,
+                };
                 let harness = self.harness.as_ref().map_err(Clone::clone)?;
                 let prompt = self.cell_prompt(concern, check, project, siblings);
                 let out = unpack::run(
@@ -442,7 +447,7 @@ impl Runner {
                         cmd.current_dir(&project.dir);
                         cell_env(cmd, concern, project, siblings);
                     },
-                    siblings,
+                    unpack::Tools::Read(siblings),
                     self.timeout,
                 )?;
                 let start = out
@@ -465,7 +470,7 @@ impl Runner {
     fn cell_prompt(
         &self,
         concern: &Concern,
-        check: &str,
+        check: Option<&str>,
         project: &Project,
         siblings: &[Project],
     ) -> String {
@@ -483,15 +488,19 @@ impl Runner {
              - Its sibling projects, if you need to compare: {}.\n\
              - Today: {}.\n\n\
              Do not modify any files. Read, and run only commands that do not change state. \
-             This is not a bug hunt.\n\n\
+             This is not a bug hunt. Review as someone who wants every real instance and no \
+             false ones, and where the concern says the rule does not apply, respect that.\n\n\
              First, write your findings in Markdown between `{FINDINGS_OPEN}` and \
              `{FINDINGS_CLOSE}`: one bullet per place the concern is or is not met, each with \
              its `path:line`, what is there, and the smallest change that would meet it. Lead \
              with the instances that matter most. Write `None.` if there is nothing to say.\n\n\
              Then answer with exactly one line between `{CELL_OPEN}` and `{CELL_CLOSE}`: a \
-             status (yes, partly, missing, n/a or unknown), a colon, and one sentence of \
-             evidence. Use `unknown` with the reason when you cannot tell.\n\n\
-             <concern>\n{}\n</concern>\n\n<check>\n{}\n</check>\n",
+             status, a colon, and one sentence of evidence. The status is `yes` when the rule \
+             holds everywhere it applies, `partly` when it holds in some places and not \
+             others, `missing` when it does not hold where it matters most, `n/a` when the \
+             rule has nothing to apply to in this project, and `unknown`, with the reason, \
+             when you cannot tell.\n\n\
+             <concern>\n{}\n</concern>\n{}",
             doctrine(),
             concern.name(),
             project.name,
@@ -503,7 +512,10 @@ impl Runner {
             },
             self.today,
             concern.definition.trim(),
-            check.trim()
+            check.map_or(String::new(), |c| format!(
+                "\n<check>\n{}\n</check>\n",
+                c.trim()
+            ))
         )
     }
 }
@@ -604,37 +616,36 @@ fn check(
     let projects = select_projects(&all, &run.projects)?;
     let runner = Runner::new(&run);
     if let Ok(harness) = &runner.harness {
-        harness.command("", runner.model.as_deref())?;
+        harness.command("", runner.model.as_deref(), false)?;
     }
 
     let mut cells = Vec::new();
     for concern in &concerns {
-        match concern.mechanism() {
-            Some(Mechanism::Prompt(_)) if !agentic => {
-                eprintln!(
-                    "crosscut: {}: prompt check not run (add --agentic to spend model calls on it)",
-                    concern.slug
-                )
-            }
-            Some(_) => cells.extend(projects.iter().map(|project| (concern, project))),
-            None => eprintln!(
-                "crosscut: {}: no check or check.md yet, so nothing to run",
+        if concern.mechanism().agentic() && !agentic {
+            eprintln!(
+                "crosscut: {}: agent review not run (add --agentic to spend model calls on it)",
                 concern.slug
-            ),
+            )
+        } else {
+            cells.extend(projects.iter().map(|project| (concern, project)));
         }
     }
 
     if dry_run {
         for (concern, project) in &cells {
-            match concern.mechanism().expect("selected above") {
+            match concern.mechanism() {
                 Mechanism::Exec(path) => {
                     println!("{}/{}: run {}", concern.slug, project.name, path.display())
                 }
-                Mechanism::Prompt(check) => {
-                    let prompt = runner.cell_prompt(concern, &check, project, &all);
+                mechanism => {
+                    let check = match &mechanism {
+                        Mechanism::Prompt(check) => Some(check.as_str()),
+                        _ => None,
+                    };
+                    let prompt = runner.cell_prompt(concern, check, project, &all);
                     let how = match &runner.harness {
                         Ok(h) => h
-                            .command(&prompt, runner.model.as_deref())
+                            .command(&prompt, runner.model.as_deref(), false)
                             .map(|(cmd, stdin)| harness::describe(&cmd, stdin, &prompt))
                             .unwrap_or_else(|e| e),
                         Err(e) => e.clone(),
@@ -647,7 +658,7 @@ fn check(
     }
 
     let results = pool(run.jobs, &cells, |(concern, project)| {
-        let mechanism = concern.mechanism().expect("selected above");
+        let mechanism = concern.mechanism();
         let say = |doing: &str, status: Option<&str>| {
             ui.say(Say::Cell {
                 concern: concern.name(),
@@ -662,7 +673,7 @@ fn check(
             Ok((status, _, _)) => say("", Some(status)),
             Err(_) => say("could not run", Some("failed")),
         }
-        (matches!(mechanism, Mechanism::Prompt(_)), result)
+        (mechanism.agentic(), result)
     });
 
     let (mut changed, mut failed) = (0, 0);
@@ -915,7 +926,7 @@ fn unpack_concerns(
                             &|c| {
                                 c.current_dir(&project.dir);
                             },
-                            std::slice::from_ref(project),
+                            unpack::Tools::Read(std::slice::from_ref(project)),
                             timeout,
                         )?;
                         let text = ui.about(&project.name, &draft);
@@ -949,7 +960,7 @@ fn unpack_concerns(
                 &|c| {
                     c.current_dir(&root);
                 },
-                &[],
+                unpack::Tools::None,
                 timeout,
             )?;
             let mut landscape = unpack::parse(&reply).inspect_err(|_| {
@@ -970,7 +981,7 @@ fn unpack_concerns(
                 &|c| {
                     c.current_dir(&root);
                 },
-                &[],
+                unpack::Tools::None,
                 timeout.min(Duration::from_secs(600)),
             );
             match reply.and_then(|reply| unpack::parse_reword(&reply, &landscape.cards)) {
@@ -1000,7 +1011,7 @@ fn unpack_concerns(
                 &|c| {
                     c.current_dir(&root);
                 },
-                &projects,
+                unpack::Tools::Read(&projects),
                 timeout.min(Duration::from_secs(600)),
             );
             match reply.and_then(|reply| unpack::parse_order(&reply, &landscape.cards)) {
@@ -1061,9 +1072,114 @@ fn unpack_concerns(
         root: Some(root.clone()),
         ..run
     };
-    let status = check(accepted, true, review, false, ui)?;
+    let status = check(accepted.clone(), true, review.clone(), false, ui)?;
     ui.finished(&root)?;
-    Ok(status)
+    Ok(make_permanent(ui, &root, accepted, review)?.unwrap_or(status))
+}
+
+/// Offers to make the accepted cross-cutting concerns' checks permanent; then an agent
+/// recommends a kind of check for each, the person keeps or changes them, agents build the
+/// chosen ones, and they run. The outcome of that run, if there was one.
+fn make_permanent(
+    ui: &dyn ui::Ui,
+    root: &Path,
+    slugs: Vec<String>,
+    run: RunArgs,
+) -> Result<Option<ExitCode>, String> {
+    if !ui.permanent() {
+        return Ok(None);
+    }
+    let harness = Harness::resolve(run.harness.clone())?;
+    let timeout = Duration::from_secs(run.timeout);
+    let concerns = select_concerns(root, &slugs)?;
+    let projects = model::projects(root)?;
+    let progress = |text: &str| ui.say(Say::Progress(text));
+    ui.say(Say::Step(
+        "Recommending",
+        "a permanent check for each, with a quick look at the code.",
+    ));
+    let reply = unpack::run(
+        &progress,
+        &harness,
+        &build::recommend_prompt(&concerns, &projects),
+        run.model.as_deref(),
+        &|c| {
+            c.current_dir(root);
+        },
+        unpack::Tools::Read(&projects),
+        timeout.min(Duration::from_secs(600)),
+    );
+    let recommended = match reply.and_then(|r| build::parse_recommendations(&r, &concerns)) {
+        Ok(recommended) => recommended,
+        Err(e) => {
+            ui.say(Say::Progress(&format!(
+                "No recommendations, so each starts as a review prompt: {e}"
+            )));
+            concerns
+                .iter()
+                .map(|c| build::Recommendation {
+                    title: c.name().to_string(),
+                    tier: build::Tier::Prompt,
+                    why: String::new(),
+                })
+                .collect()
+        }
+    };
+    let chosen = ui.tiers(&recommended);
+    let jobs: Vec<(&Concern, build::Tier, &str)> = concerns
+        .iter()
+        .zip(&recommended)
+        .zip(chosen)
+        .filter_map(|((c, r), tier)| {
+            tier.map(|t| (c, t, if t == r.tier { r.why.as_str() } else { "" }))
+        })
+        .collect();
+    if jobs.is_empty() {
+        return Ok(None);
+    }
+    ui.say(Say::Step("Building", "the checks you chose."));
+    let results = pool(run.jobs, &jobs, |(concern, tier, why)| {
+        let say = |doing: &str, status: Option<&str>| {
+            ui.say(Say::Cell {
+                concern: concern.name(),
+                project: tier.key(),
+                doing,
+                status,
+            })
+        };
+        say("starting", None);
+        let out = unpack::run(
+            &|t| say(t, None),
+            &harness,
+            &build::build_prompt(concern, *tier, why, &projects),
+            run.model.as_deref(),
+            &|c| {
+                c.current_dir(&concern.dir);
+            },
+            unpack::Tools::Write(&projects),
+            timeout,
+        )
+        .and_then(|_| build::built(concern, *tier));
+        match &out {
+            Ok(()) => say("", Some("built")),
+            Err(_) => say("could not build", Some("failed")),
+        }
+        out.map(|()| concern.slug.clone())
+    });
+    let mut built = Vec::new();
+    for ((concern, _, _), result) in jobs.iter().zip(results) {
+        match result {
+            Ok(slug) => built.push(slug),
+            Err(e) => ui.say(Say::Progress(&format!("{}: {e}", concern.slug))),
+        }
+    }
+    if built.is_empty() {
+        return Ok(Some(ExitCode::FAILURE));
+    }
+    ui.say(Say::Step("Checking", "again, with the checks you built."));
+    let status = check(built, true, run, false, ui)?;
+    ui.finished(root)?;
+    Ok(Some(status))
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1129,11 +1245,7 @@ fn map(project: Option<String>, root: Option<PathBuf>) -> Result<ExitCode, Strin
             .map(|p| cell_view(concern, &p.name))
             .collect();
         if cells.iter().all(Option::is_none) {
-            line.push_str(if concern.mechanism().is_some() {
-                "  (not checked yet)"
-            } else {
-                "  (no check yet)"
-            });
+            line.push_str("  (not checked yet)");
         }
         for ((p, w), cell) in projects.iter().zip(&widths).zip(&cells) {
             let text = match cell {
@@ -1197,11 +1309,12 @@ fn test(slugs: Vec<String>, agentic: bool, run: RunArgs) -> Result<ExitCode, Str
     let runner = Runner::new(&run);
     let mut jobs = Vec::new();
     for concern in &concerns {
-        let Some(mechanism) = concern.mechanism() else {
+        let mechanism = concern.mechanism();
+        if let Mechanism::Review = mechanism {
             println!("{}: no check yet", concern.slug);
             continue;
-        };
-        let prompted = matches!(mechanism, Mechanism::Prompt(_));
+        }
+        let prompted = mechanism.agentic();
         let cases = fixture_cases(&concern.dir.join("fixtures"));
         if cases.is_empty() {
             println!("{}: no fixtures", concern.slug);
@@ -1220,7 +1333,7 @@ fn test(slugs: Vec<String>, agentic: bool, run: RunArgs) -> Result<ExitCode, Str
         }
     }
     let results = pool(run.jobs, &jobs, |(concern, _, projects, project, _)| {
-        let mechanism = concern.mechanism().expect("selected above");
+        let mechanism = concern.mechanism();
         match projects.iter().find(|p| &p.name == project) {
             Some(p) => runner.cell(concern, &mechanism, p, projects, &|_| {}),
             None => Err(format!(

@@ -19,6 +19,11 @@ pub fn data(root: &Path) -> Result<serde_json::Value, String> {
             json!({
                 "slug": c.slug,
                 "definition": c.definition,
+                "check": match c.mechanism() {
+                    model::Mechanism::Exec(_) => "script",
+                    model::Mechanism::Prompt(_) => "prompt",
+                    model::Mechanism::Review => "review",
+                },
                 "cells": projects.iter().map(|p| {
                     let o = observed.iter().find(|o| o.project == p.name);
                     let d = decided.iter().find(|d| d.project == p.name);

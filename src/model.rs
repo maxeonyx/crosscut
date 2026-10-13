@@ -128,8 +128,17 @@ fn wildcard(pattern: &str, name: &str) -> bool {
 pub enum Mechanism {
     /// Tiers 1 and 2: an executable that prints `<status>: <evidence>` for one project.
     Exec(PathBuf),
-    /// Tier 3: a prompt a coding agent answers for one project.
+    /// Tier 3: a checked-in prompt a coding agent answers for one project.
     Prompt(String),
+    /// No check yet: a coding agent reviews for the concern as written.
+    Review,
+}
+
+impl Mechanism {
+    /// Whether running it costs model calls.
+    pub fn agentic(&self) -> bool {
+        !matches!(self, Mechanism::Exec(_))
+    }
 }
 
 pub struct Concern {
@@ -147,14 +156,13 @@ impl Concern {
             .trim()
     }
 
-    pub fn mechanism(&self) -> Option<Mechanism> {
+    pub fn mechanism(&self) -> Mechanism {
         let exec = self.dir.join("check");
         if exec.is_file() {
-            return Some(Mechanism::Exec(exec));
+            return Mechanism::Exec(exec);
         }
         std::fs::read_to_string(self.dir.join("check.md"))
-            .ok()
-            .map(Mechanism::Prompt)
+            .map_or(Mechanism::Review, Mechanism::Prompt)
     }
 
     /// Decisions: list items under `## Decisions`, written `- **project**: status: reason`.

@@ -528,7 +528,7 @@ Each concern directory holds:
   each kind of project, and the **decisions** people have made about
   particular projects;
 - `check`, an executable, or `check.md`, a prompt: how to observe it for one
-  project;
+  project. With neither, an agent reviews for the concern as written;
 - `fixtures/`: invented projects with known answers, which test that
   mechanism;
 - `observed.tsv`: what was last observed, written by the tool and committed.
@@ -564,7 +564,7 @@ If `crosscut` is on `PATH`:
 
 | Command | What it does |
 |---|---|
-| `crosscut unpack [dir...]` | An agent proposes concerns as cards from short descriptions of the projects; the person accepts or declines each. Accepted ones become concerns with a prompt check, and are reviewed in every project. Declined ones are not proposed again. |
+| `crosscut unpack [dir...]` | An agent proposes concerns as cards from short descriptions of the projects; the person accepts or declines each. Accepted ones become concerns, and an agent reviews each in every project. Then, if the person wants, an agent recommends a permanent check for each (a standard tool, a custom script, or a review prompt) and builds the chosen ones. Declined ones are not proposed again. |
 | `crosscut check [slug...]` | Runs machine checks (tiers 1 and 2) per project, and records observations. `--agentic` adds prompt checks, which cost model calls. |
 | `crosscut map [--project p]` | Shows every concern against every project, combining decisions and observations. |
 | `crosscut test [slug...]` | Runs each mechanism against its fixtures. `--agentic` includes prompt checks. |

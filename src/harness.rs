@@ -46,7 +46,14 @@ impl Harness {
     }
 
     /// The command to run, and whether the prompt goes on stdin (otherwise it is the last argument).
-    pub fn command(&self, prompt: &str, model: Option<&str>) -> Result<(Command, bool), String> {
+    /// With `write`, the agent may also write files in its working directory: only a build of a
+    /// check, in the concern's own directory, gets that.
+    pub fn command(
+        &self,
+        prompt: &str,
+        model: Option<&str>,
+        write: bool,
+    ) -> Result<(Command, bool), String> {
         let (mut cmd, stdin) = match self {
             // A prompt check only reads and runs commands; it answers in text. Bash is allowed so
             // it can look; edit tools, subagents, MCP servers and the target's project settings
@@ -60,13 +67,22 @@ impl Harness {
                     "--setting-sources",
                     "user",
                 ])
-                .args(["--permission-mode", "dontAsk"])
-                .args(["--allowedTools", "Read,Grep,Glob,Bash,WebFetch,WebSearch"])
-                .args([
-                    "--disallowedTools",
-                    "Edit,Write,NotebookEdit,Agent,Workflow",
-                ])
-                .arg("--strict-mcp-config");
+                .args(["--permission-mode", "dontAsk"]);
+                if write {
+                    // Edits only under the working directory, the concern's own.
+                    cmd.args([
+                        "--allowedTools",
+                        "Read,Grep,Glob,Bash,Edit(./**),Write(./**)",
+                    ])
+                    .args(["--disallowedTools", "NotebookEdit,Agent,Workflow"]);
+                } else {
+                    cmd.args(["--allowedTools", "Read,Grep,Glob,Bash,WebFetch,WebSearch"])
+                        .args([
+                            "--disallowedTools",
+                            "Edit,Write,NotebookEdit,Agent,Workflow",
+                        ]);
+                }
+                cmd.arg("--strict-mcp-config");
                 (cmd, true)
             }
             Harness::Codex => {
@@ -74,7 +90,11 @@ impl Harness {
                 cmd.args([
                     "exec",
                     "--sandbox",
-                    "read-only",
+                    if write {
+                        "workspace-write"
+                    } else {
+                        "read-only"
+                    },
                     "--skip-git-repo-check",
                     "--ephemeral",
                 ]);
