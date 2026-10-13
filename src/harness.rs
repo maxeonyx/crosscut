@@ -36,6 +36,15 @@ impl Harness {
         }
     }
 
+    pub fn name(&self) -> &str {
+        match self {
+            Harness::Claude => "claude",
+            Harness::Codex => "codex",
+            Harness::OpenCode => "opencode",
+            Harness::Shell(command) => command,
+        }
+    }
+
     /// The command to run, and whether the prompt goes on stdin (otherwise it is the last argument).
     pub fn command(&self, prompt: &str, model: Option<&str>) -> Result<(Command, bool), String> {
         let (mut cmd, stdin) = match self {

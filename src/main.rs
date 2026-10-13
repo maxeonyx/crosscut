@@ -9,6 +9,7 @@ mod harness;
 mod model;
 mod report;
 
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -228,6 +229,8 @@ struct RunArgs {
 
 fn main() -> ExitCode {
     let result = match Cli::parse().command {
+        // A person at a terminal is set up interactively; an agent gets instructions.
+        None if std::io::stdin().is_terminal() && std::io::stderr().is_terminal() => welcome(),
         None => {
             print!("{}", orientation());
             Ok(ExitCode::SUCCESS)
@@ -309,7 +312,8 @@ fn orientation() -> String {
          crosscut prompt generalize   what does the work just done reveal?\n\n\
          Or run `crosscut install-skill` once, and your harness will load the same\n\
          material as the `crosscut` skill.\n\n\
-         Commands: `crosscut check`, `crosscut map`, `crosscut test`. See `crosscut --help`.\n",
+         Commands: `crosscut discover`, `crosscut check`, `crosscut map`, `crosscut test`, \
+         `crosscut report`. See `crosscut --help`.\n",
         doctrine()
     )
 }
@@ -707,6 +711,61 @@ fn check(
 
 // ---------------------------------------------------------------------------------------
 // Discovery
+
+/// Bare `crosscut` for a person: show the map if there is one, otherwise find the projects
+/// here, and in either case offer to discover concerns.
+fn welcome() -> Result<ExitCode, String> {
+    eprintln!(
+        "CrossCut. Every project has more worth caring about than the task at hand.\n\
+         An agent reads your projects and proposes concerns; you keep the ones you want.\n"
+    );
+    let mut input = std::io::stdin().lock();
+    let run = RunArgs {
+        projects: Vec::new(),
+        jobs: 6,
+        harness: None,
+        model: None,
+        timeout: 1800,
+        root: None,
+    };
+    if let Ok(root) = model::find_root(None) {
+        map(None, Some(root.clone()))?;
+        if !discover::confirm(&mut input, "\nLook for more concerns?") {
+            return Ok(ExitCode::SUCCESS);
+        }
+        drop(input); // discovery reads stdin too
+        return discover_concerns(Vec::new(), None, None, run);
+    }
+    let here =
+        std::env::current_dir().map_err(|e| format!("cannot read current directory: {e}"))?;
+    let candidates = discover::candidates(&here);
+    if candidates.is_empty() {
+        eprintln!(
+            "There are no git repositories in {} or the two levels below it.\n\
+             Run `crosscut` in the directory that holds your projects, or name them:\n  \
+             crosscut discover ~/src/api ~/src/web",
+            here.display()
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+    eprintln!("Projects here:");
+    for (i, dir) in candidates.iter().enumerate() {
+        eprintln!(
+            "  {}. {}",
+            i + 1,
+            dir.strip_prefix(&here).unwrap_or(dir).display()
+        );
+    }
+    let chosen = discover::choose(&mut input, &candidates);
+    drop(input); // discovery reads stdin too
+    eprintln!(
+        "\nCrossCut keeps its files in {}. It changes nothing in your projects.",
+        here.join("crosscut").display()
+    );
+    let harness = Harness::resolve(None)?;
+    eprintln!("The agent is {}.\n", harness.name());
+    discover_concerns(chosen, None, None, run)
+}
 
 fn discover_concerns(
     dirs: Vec<PathBuf>,

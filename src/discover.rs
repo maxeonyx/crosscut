@@ -268,6 +268,68 @@ pub fn ask(input: &mut impl BufRead) -> Answer {
     }
 }
 
+/// A yes-or-no question, yes by default.
+pub fn confirm(input: &mut impl BufRead, question: &str) -> bool {
+    eprint!("{question} [Y/n] > ");
+    let _ = std::io::stderr().flush();
+    let mut line = String::new();
+    input.read_line(&mut line).unwrap_or(0) > 0 && !line.trim().to_lowercase().starts_with('n')
+}
+
+/// Asks which candidates to look at: all by default, or the numbers given.
+pub fn choose(input: &mut impl BufRead, candidates: &[PathBuf]) -> Vec<PathBuf> {
+    loop {
+        eprint!("\nLook at which? Enter for all, or numbers such as `1 3` > ");
+        let _ = std::io::stderr().flush();
+        let mut line = String::new();
+        if input.read_line(&mut line).unwrap_or(0) == 0 || line.trim().is_empty() {
+            return candidates.to_vec();
+        }
+        let picked: Option<Vec<PathBuf>> = line
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|w| !w.is_empty())
+            .map(|w| {
+                let n: usize = w.parse().ok()?;
+                candidates.get(n.checked_sub(1)?).cloned()
+            })
+            .collect();
+        match picked {
+            Some(picked) if !picked.is_empty() => return picked,
+            _ => eprintln!("  Numbers from 1 to {}, please.", candidates.len()),
+        }
+    }
+}
+
+/// Git repositories at `dir` and up to two levels below it.
+pub fn candidates(dir: &Path) -> Vec<PathBuf> {
+    fn walk(dir: &Path, depth: usize, found: &mut Vec<PathBuf>) {
+        if dir.join(".git").exists() {
+            found.push(dir.to_path_buf());
+        }
+        if depth == 0 {
+            return;
+        }
+        let mut subdirs: Vec<PathBuf> = std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .filter(|p| {
+                let name = p.file_name().unwrap_or_default().to_string_lossy();
+                !name.starts_with('.') && !matches!(&*name, "node_modules" | "target")
+            })
+            .collect();
+        subdirs.sort();
+        for sub in subdirs {
+            walk(&sub, depth - 1, found);
+        }
+    }
+    let mut found = Vec::new();
+    walk(dir, 2, &mut found);
+    found
+}
+
 /// The concern directory for an accepted card: its definition, with where it was seen, and
 /// a prompt check that reviews a project for it.
 pub fn accept(root: &Path, card: &Card, today: &str) -> Result<PathBuf, String> {
@@ -343,4 +405,34 @@ pub fn add_projects(root: &Path, dirs: &[PathBuf]) -> Result<(), String> {
 
 pub fn write(path: &Path, text: &str) -> Result<(), String> {
     std::fs::write(path, text).map_err(|e| format!("cannot write {}: {e}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn candidates_are_git_repositories_up_to_two_levels_down() {
+        let dir = tempfile::tempdir().unwrap();
+        for repo in ["api", "apps/web", "a/b/too-deep", ".hidden/x"] {
+            std::fs::create_dir_all(dir.path().join(repo).join(".git")).unwrap();
+        }
+        std::fs::create_dir_all(dir.path().join("notes")).unwrap();
+        let found: Vec<PathBuf> = candidates(dir.path())
+            .into_iter()
+            .map(|p| p.strip_prefix(dir.path()).unwrap().to_path_buf())
+            .collect();
+        assert_eq!(found, [PathBuf::from("api"), PathBuf::from("apps/web")]);
+    }
+
+    #[test]
+    fn choosing_takes_all_by_default_numbers_otherwise_and_asks_again_on_nonsense() {
+        let all = [PathBuf::from("a"), PathBuf::from("b"), PathBuf::from("c")];
+        assert_eq!(choose(&mut "\n".as_bytes(), &all), all);
+        assert_eq!(
+            choose(&mut "3, 1\n".as_bytes(), &all),
+            [all[2].clone(), all[0].clone()]
+        );
+        assert_eq!(choose(&mut "4\nx\n2\n".as_bytes(), &all), [all[1].clone()]);
+    }
 }
