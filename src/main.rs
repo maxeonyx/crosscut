@@ -8,6 +8,7 @@ mod discover;
 mod harness;
 mod model;
 mod report;
+mod workspace;
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -712,8 +713,9 @@ fn check(
 // ---------------------------------------------------------------------------------------
 // Discovery
 
-/// Bare `crosscut` for a person: show the map if there is one, otherwise find the projects
-/// here, and in either case offer to discover concerns.
+/// Bare `crosscut` for a person. In a workspace, show its map and offer more discovery.
+/// Anywhere else, say what CrossCut needs, recommend making a workspace of fresh clones, and
+/// say what to do instead.
 fn welcome() -> Result<ExitCode, String> {
     eprintln!(
         "CrossCut. Every project has more worth caring about than the task at hand.\n\
@@ -736,35 +738,98 @@ fn welcome() -> Result<ExitCode, String> {
         drop(input); // discovery reads stdin too
         return discover_concerns(Vec::new(), None, None, run);
     }
+
     let here =
         std::env::current_dir().map_err(|e| format!("cannot read current directory: {e}"))?;
-    let candidates = discover::candidates(&here);
-    if candidates.is_empty() {
+    let suggested = here.join("crosscut-workspace");
+    if suggested.join("crosscut").is_dir() {
         eprintln!(
-            "There are no git repositories in {} or the two levels below it.\n\
-             Run `crosscut` in the directory that holds your projects, or name them:\n  \
-             crosscut discover ~/src/api ~/src/web",
-            here.display()
+            "You already have a workspace at {0}. To carry on there:\n  cd {0} && crosscut\n",
+            tilde(&suggested)
         );
+    }
+    let harness = Harness::resolve(None);
+    eprintln!(
+        "What it needs:\n  \
+         - the repositories to look at, cloned side by side in one workspace directory;\n  \
+         - a coding agent to do the reading: claude, codex or opencode, logged in. {}\n\
+         It never changes your own checkouts.\n\n\
+         Recommended: make a workspace at {}, with fresh clones of the repositories you\n\
+         pick below.\n\n\
+         If you would rather not:\n  \
+         - use checkouts you already have, in place: crosscut discover ~/src/api ~/src/web\n  \
+         - let an agent drive: without a terminal, `crosscut` prints instructions for it.\n",
+        match &harness {
+            Ok(h) => format!("Found: {}.", h.name()),
+            Err(_) => "None found.".into(),
+        },
+        tilde(&suggested)
+    );
+    let harness = harness?;
+
+    let repos = workspace::find(&here, 3);
+    if repos.is_empty() {
+        eprintln!(
+            "No repositories in {} or three levels below it; name them as owner/name.",
+            tilde(&here)
+        );
+    } else {
+        eprintln!("Repositories on this machine:");
+        for (i, repo) in repos.iter().enumerate() {
+            let clones = match repo.clones.len() {
+                1 => tilde(&repo.clones[0]),
+                n => format!("{n} clones"),
+            };
+            eprintln!("  {:>3}. {}  ({clones})", i + 1, repo.name);
+        }
+    }
+    let chosen = workspace::choose(&mut input, &repos);
+    if chosen.is_empty() {
         return Ok(ExitCode::SUCCESS);
     }
-    eprintln!("Projects here:");
-    for (i, dir) in candidates.iter().enumerate() {
-        eprintln!(
-            "  {}. {}",
-            i + 1,
-            dir.strip_prefix(&here).unwrap_or(dir).display()
-        );
-    }
-    let chosen = discover::choose(&mut input, &candidates);
+    eprint!("\nWorkspace directory [{}] > ", tilde(&suggested));
+    let _ = std::io::Write::flush(&mut std::io::stderr());
+    let mut line = String::new();
+    let _ = std::io::BufRead::read_line(&mut input, &mut line);
     drop(input); // discovery reads stdin too
+    let workspace = match line.trim() {
+        "" => suggested,
+        path => match path.strip_prefix("~/") {
+            Some(rest) => home().join(rest),
+            None => here.join(path),
+        },
+    };
+    eprintln!("\nPulling in:");
+    let dirs = workspace::pull_in(&workspace, &chosen)?;
     eprintln!(
-        "\nCrossCut keeps its files in {}. It changes nothing in your projects.",
-        here.join("crosscut").display()
+        "\nThe workspace is {}. Run `crosscut` there to come back to it.\n\
+         The agent is {}.\n",
+        tilde(&workspace),
+        harness.name()
     );
-    let harness = Harness::resolve(None)?;
-    eprintln!("The agent is {}.\n", harness.name());
-    discover_concerns(chosen, None, None, run)
+    discover_concerns(
+        dirs,
+        None,
+        None,
+        RunArgs {
+            root: Some(workspace),
+            ..run
+        },
+    )
+}
+
+fn home() -> PathBuf {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default()
+}
+
+/// A path for people to read, with the home directory as `~`.
+fn tilde(path: &Path) -> String {
+    match path.strip_prefix(home()) {
+        Ok(rest) if !home().as_os_str().is_empty() => format!("~/{}", rest.display()),
+        _ => path.display().to_string(),
+    }
 }
 
 fn discover_concerns(
