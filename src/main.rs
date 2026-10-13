@@ -857,6 +857,11 @@ fn discover_concerns(
     }
     let today = jiff::Zoned::now().date().to_string();
     let concerns = model::concerns(&root)?;
+    let width = std::env::var("COLUMNS")
+        .ok()
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(100);
+    let mut input = std::io::stdin().lock();
 
     let landscape_path = root.join("crosscut/landscape.json");
     let landscape = match cards {
@@ -868,20 +873,48 @@ fn discover_concerns(
         }
         None => {
             let harness = Harness::resolve(run.harness.clone())?;
+            let timeout = Duration::from_secs(run.timeout);
+            // Discovery works from short descriptions, never from the code.
+            let mut about = Vec::new();
+            for project in &projects {
+                let text = match discover::about(&root, &project.name) {
+                    Some(text) => text,
+                    None => {
+                        eprintln!("Describing {} from its README and manifests.", project.name);
+                        let draft = discover::run(
+                            &harness,
+                            &discover::describe_prompt(project),
+                            review_model.as_deref().or(run.model.as_deref()),
+                            &project.dir,
+                            Some(project),
+                            timeout,
+                        )?;
+                        let text =
+                            discover::confirm_about(&mut input, &project.name, &draft, width);
+                        let path = discover::about_path(&root, &project.name);
+                        std::fs::create_dir_all(path.parent().expect("in crosscut/about"))
+                            .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
+                        discover::write(&path, &format!("{text}\n"))?;
+                        text
+                    }
+                };
+                about.push((project.name.clone(), text));
+            }
             let known: Vec<String> = concerns.iter().map(|c| c.name().to_string()).collect();
             let declined =
                 std::fs::read_to_string(root.join("crosscut/declined.md")).unwrap_or_default();
-            let prompt =
-                discover::prompt(&prompt("discover")?, &projects, &known, &declined, &today);
-            let names: Vec<&str> = projects.iter().map(|p| p.name.as_str()).collect();
-            eprintln!("Looking at {}. This takes a while.\n", names.join(", "));
+            let prompt = discover::prompt(&prompt("discover")?, &about, &known, &declined);
+            eprintln!(
+                "\nThinking about concerns for {}, from their descriptions alone. This takes a few minutes.",
+                about.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(", ")
+            );
             let reply = discover::run(
                 &harness,
                 &prompt,
                 run.model.as_deref(),
                 &root,
-                &projects,
-                Duration::from_secs(run.timeout),
+                None,
+                timeout,
             )?;
             let landscape = discover::parse(&reply).inspect_err(|_| {
                 let _ = discover::write(&root.join("crosscut/landscape.reply.md"), &reply);
@@ -897,11 +930,6 @@ fn discover_concerns(
         .iter()
         .filter(|card| !concerns.iter().any(|c| c.slug == card.slug))
         .collect();
-    let width = std::env::var("COLUMNS")
-        .ok()
-        .and_then(|c| c.parse().ok())
-        .unwrap_or(100);
-    let mut input = std::io::stdin().lock();
     let (mut accepted, mut declined, mut skipped) = (Vec::new(), 0, 0);
     for (i, card) in fresh.iter().enumerate() {
         eprint!("{}", discover::render(card, i + 1, fresh.len(), width));
@@ -919,22 +947,12 @@ fn discover_concerns(
             discover::Answer::Quit => break,
         }
     }
+    drop(input);
     eprintln!(
         "\n{} accepted, {declined} declined, {skipped} skipped, of {} cards.",
         accepted.len(),
         fresh.len()
     );
-    for (heading, lines) in [
-        ("Also noticed", &landscape.also_noticed),
-        ("Could not see", &landscape.could_not_see),
-    ] {
-        if !lines.is_empty() {
-            eprintln!("\n{heading}:");
-            for line in lines {
-                eprint!("{}", discover::wrap(line, "  - ", "    ", width));
-            }
-        }
-    }
     if accepted.is_empty() {
         return Ok(ExitCode::SUCCESS);
     }

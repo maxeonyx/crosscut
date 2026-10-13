@@ -267,8 +267,11 @@ The seed set is nothing like a checklist:
   software it does not suit. Every instance in a good landscape comes from the
   software in front of you.
 
-Discovery finds which concerns apply here, the concrete instances in this
-person's software, and the ones no seed anticipated.
+Discovery finds which concerns apply to these kinds of software, including
+the ones no seed anticipated. It works from a short description of each
+project, never from the code, so that every card starts as a rule and not as
+a bug. Review, with the code, finds the concrete instances in this person's
+software.
 
 **A concern is the most general form of the rule, never the bug that revealed
 it.** The instances show how it cashes out in this project. The rule is kept

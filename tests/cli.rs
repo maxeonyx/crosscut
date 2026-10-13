@@ -700,10 +700,11 @@ fn map_with_no_concerns_says_how_to_add_one() {
 
 // --- discover --------------------------------------------------------------------------
 
-/// A stand-in agent: proposes two cards to a discovery prompt, and reviews to a cell prompt.
-/// It saves each prompt it is given, so tests can read them.
+/// A stand-in agent: describes a project, proposes two cards from descriptions, and reviews
+/// to a cell prompt. It saves each prompt it is given, so tests can read them.
 const DISCOVERY_AGENT: &str = r#"p=$(cat); n=$(ls "$PROMPTS" 2>/dev/null | wc -l); mkdir -p "$PROMPTS"; printf '%s' "$p" > "$PROMPTS/$n.md"
 case "$p" in
+*'Describe the project in'*) echo 'A small Python API that serves records.';;
 *'Discover concerns for these projects'*) cat <<'JSON'
 Thinking out loud first.
 <crosscut-cards>
@@ -711,14 +712,12 @@ Thinking out loud first.
  {"slug": "log-once", "title": "Each error should be logged once, where it is handled",
   "justification": "Only the handler knows how serious an error is.",
   "stories": ["One timeout becomes four error lines.", "Debug traces are a separate stream."],
-  "instances": [{"project": "api", "location": "src/repo.py:12", "what": "logs, then re-raises"}],
-  "effort": "An hour.", "how_to_review": "Search for log calls inside except blocks that re-raise."},
+  "projects": ["api"], "here": "APIs tend to log in every layer an error passes through.",
+  "how_to_review": "Search for log calls inside except blocks that re-raise."},
  {"slug": "as-of", "title": "Derived data that can go stale should carry its as-of time",
   "justification": "A failed refresh looks like a quiet day.", "stories": ["A dashboard looks normal for three days."],
-  "instances": [{"project": "api", "location": "jobs/report.py:3", "what": "no timestamp"}],
-  "effort": "Small.", "how_to_review": "Find derived tables and reports."}
-],
- "also_noticed": ["api pins an old base image"], "could_not_see": ["production logs"]}
+  "projects": ["api"], "here": "Cached responses.", "how_to_review": "Find derived tables and reports."}
+]}
 </crosscut-cards>
 JSON
 ;;
@@ -751,25 +750,37 @@ fn discover(dir: &Path, args: &[&str], answers: &str) -> (String, String) {
     (text(&out.stdout), text(&out.stderr))
 }
 
+fn prompt_number(dir: &Path, n: usize) -> String {
+    fs::read_to_string(dir.join("prompts").join(format!("{n}.md"))).unwrap()
+}
+
 #[test]
-fn discover_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
+fn discover_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
     let ws = workspace();
     let dir = ws.path();
-    let (out, err) = discover(dir, &["api"], "a\nd\nwe already show refresh times\n");
+    // Keep the description, accept the first card, decline the second.
+    let (out, err) = discover(dir, &["api"], "\na\nd\nwe already show refresh times\n");
 
+    assert!(
+        err.contains("api: A small Python API that serves records."),
+        "{err}"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("crosscut/about/api.md")).unwrap(),
+        "A small Python API that serves records.\n"
+    );
     assert!(
         err.contains("[1/2]  Each error should be logged once"),
         "{err}"
     );
     assert!(
-        err.contains("api · src/repo.py:12: logs, then re-raises"),
+        err.contains("Here (api): APIs tend to log in every layer"),
         "{err}"
     );
     assert!(
         err.contains("1 accepted, 1 declined, 0 skipped, of 2 cards"),
         "{err}"
     );
-    assert!(err.contains("api pins an old base image"), "{err}");
     assert_eq!(
         fs::read_to_string(dir.join("crosscut/projects")).unwrap(),
         "api\n"
@@ -779,7 +790,7 @@ fn discover_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
     let definition = fs::read_to_string(concern.join("concern.md")).unwrap();
     assert!(definition.starts_with("# Each error should be logged once, where it is handled\n"));
     assert!(
-        definition.contains("- **api** `src/repo.py:12`: logs, then re-raises"),
+        definition.contains("APIs tend to log in every layer"),
         "{definition}"
     );
     assert!(definition.contains("## Decisions"), "{definition}");
@@ -790,9 +801,12 @@ fn discover_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
     );
 
     let declined = fs::read_to_string(dir.join("crosscut/declined.md")).unwrap();
-    assert!(declined.contains(
-        "- Derived data that can go stale should carry its as-of time: we already show refresh times"
-    ), "{declined}");
+    assert!(
+        declined.contains(
+            "- Derived data that can go stale should carry its as-of time: we already show refresh times"
+        ),
+        "{declined}"
+    );
     assert!(!dir.join("crosscut/concerns/as-of").exists());
 
     // The accepted concern was reviewed in every project, and its findings kept.
@@ -812,28 +826,43 @@ fn discover_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
 }
 
 #[test]
-fn the_next_discovery_knows_what_was_kept_and_what_was_declined() {
+fn discovery_sees_descriptions_not_code() {
     let ws = workspace();
     let dir = ws.path();
-    discover(dir, &["api"], "a\nd\nwe already show refresh times\n");
-    discover(dir, &[], "q\n");
-    let second = fs::read_to_string(dir.join("prompts/2.md")).unwrap();
+    discover(dir, &["api"], "a much better description\nq\n");
+    assert!(prompt_number(dir, 0).contains("Describe the project in"));
+    let discovery = prompt_number(dir, 1);
     assert!(
-        second.contains(CARRY_FORWARD),
+        discovery.contains("### `api`\n\na much better description"),
+        "{discovery}"
+    );
+    assert!(
+        !discovery.contains(&*dir.join("api").to_string_lossy()),
+        "no paths to the code"
+    );
+    assert!(
+        discovery.contains(CARRY_FORWARD),
         "the doctrine travels with the prompt"
     );
     assert!(
-        second.contains("Read the seed cards"),
+        discovery.contains("never from its code"),
         "the discover mode is included"
     );
     assert!(
-        second.contains("Elapsed time should be measured with a monotonic clock"),
+        discovery.contains("Elapsed time should be measured with a monotonic clock"),
         "and the seeds"
     );
-    assert!(second.contains(&format!(
-        "`api` at `{}`",
-        dir.join("api").canonicalize().unwrap().display()
-    )));
+}
+
+#[test]
+fn the_next_discovery_reuses_descriptions_and_knows_what_was_kept_and_declined() {
+    let ws = workspace();
+    let dir = ws.path();
+    discover(dir, &["api"], "\na\nd\nwe already show refresh times\n");
+    discover(dir, &[], "q\n");
+    // Prompts: describe, discover, review, then only the second discovery.
+    assert_eq!(fs::read_dir(dir.join("prompts")).unwrap().count(), 4);
+    let second = prompt_number(dir, 3);
     assert!(
         flat(&second).contains(
             "must not propose again: - Each error should be logged once, where it is handled"
@@ -850,7 +879,7 @@ fn the_next_discovery_knows_what_was_kept_and_what_was_declined() {
 fn saved_cards_float_again_without_an_agent_minus_those_already_kept() {
     let ws = workspace();
     let dir = ws.path();
-    discover(dir, &["api"], "a\nq\n");
+    discover(dir, &["api"], "\na\nq\n");
     let (_, err) = discover(dir, &["--cards", "crosscut/landscape.json"], "s\n");
     assert!(
         err.contains("[1/1]  Derived data that can go stale"),
@@ -858,14 +887,16 @@ fn saved_cards_float_again_without_an_agent_minus_those_already_kept() {
     );
     assert_eq!(
         fs::read_dir(dir.join("prompts")).unwrap().count(),
-        2,
-        "one discovery, one review: no new agent run"
+        3,
+        "describe, discover, review: no new agent run"
     );
 }
 
 #[test]
 fn an_unreadable_answer_is_kept_for_inspection() {
     let ws = workspace();
+    fs::create_dir_all(ws.path().join("crosscut/about")).unwrap();
+    fs::write(ws.path().join("crosscut/about/api.md"), "An API.\n").unwrap();
     let out = crosscut()
         .args([
             "discover",

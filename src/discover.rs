@@ -1,6 +1,10 @@
-//! `crosscut discover`: an agent proposes concerns for a set of projects, the person accepts
-//! or declines each one, and accepted concerns become concern directories that the prompt
-//! check then reviews.
+//! `crosscut discover`: each project is described in a few sentences, an agent proposes
+//! concerns from those descriptions alone, the person accepts or declines each one, and
+//! accepted concerns become concern directories whose prompt check reviews the code.
+//!
+//! Discovery never sees the code. A concern found in code starts life as one bug and has to
+//! be argued back up to a rule; a concern found from a description can only be the rule. The
+//! review is what finds where each rule cashes out.
 
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -19,10 +23,6 @@ const CARDS_CLOSE: &str = "</crosscut-cards>";
 #[derive(Serialize, Deserialize)]
 pub struct Landscape {
     pub cards: Vec<Card>,
-    #[serde(default)]
-    pub also_noticed: Vec<String>,
-    #[serde(default)]
-    pub could_not_see: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -31,16 +31,11 @@ pub struct Card {
     pub title: String,
     pub justification: String,
     pub stories: Vec<String>,
-    pub instances: Vec<Instance>,
-    pub effort: String,
+    /// The projects it applies to.
+    pub projects: Vec<String>,
+    /// How it tends to cash out in software like these projects.
+    pub here: String,
     pub how_to_review: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Instance {
-    pub project: String,
-    pub location: String,
-    pub what: String,
 }
 
 pub enum Answer {
@@ -50,18 +45,17 @@ pub enum Answer {
     Quit,
 }
 
-/// The prompt for one discovery run: the discover mode with the doctrine and seeds, then this
-/// run's projects, what is already decided, and the answer format.
+/// The prompt for one discovery run: the discover mode with the doctrine and seeds, then the
+/// projects' descriptions, what is already decided, and the answer format.
 pub fn prompt(
     mode_prompt: &str,
-    projects: &[Project],
+    about: &[(String, String)],
     known: &[String],
     declined: &str,
-    today: &str,
 ) -> String {
-    let projects: Vec<String> = projects
+    let projects: String = about
         .iter()
-        .map(|p| format!("- `{}` at `{}`", p.name, p.dir.display()))
+        .map(|(name, text)| format!("### `{name}`\n\n{}\n\n", text.trim()))
         .collect();
     let known = if known.is_empty() {
         "none yet".into()
@@ -75,12 +69,12 @@ pub fn prompt(
     };
     format!(
         "{mode_prompt}\n\n---\n\n# Your task\n\n\
-         Discover concerns for these projects, as the discover mode above describes. No human \
-         is available until you finish: the person will see your cards one at a time, and \
-         accept or decline each.\n\n\
-         {}\n\n\
-         Today: {today}.\n\n\
-         Do not modify any files. Read, and run only commands that do not change state.\n\n\
+         Discover concerns for these projects, as the discover mode above describes. You have \
+         their descriptions and nothing else: no code, and no tools. No human is available \
+         until you finish: the person will see your cards one at a time, and accept or decline \
+         each. A reviewer with the code will then look for each accepted rule in every \
+         project.\n\n\
+         ## The projects\n\n{projects}\
          Concerns the person already keeps, which you must not propose again: {known}\n\n\
          Concerns the person declined, with their reasons. Do not propose these again, and \
          learn from the reasons: {declined}\n\n\
@@ -93,18 +87,31 @@ pub fn prompt(
              \"slug\": \"kebab-case-name\",\n      \
              \"title\": \"The rule, in the rule form\",\n      \
              \"justification\": \"The concept behind it, in the terms a computer scientist would use, and why it holds.\",\n      \
-             \"stories\": [\"A concrete story\", \"...including where it does not apply\"],\n      \
-             \"instances\": [{{\"project\": \"project name\", \"location\": \"path/to/file:line\", \"what\": \"what is there, concretely\"}}],\n      \
-             \"effort\": \"What acting on it would take here, in one sentence\",\n      \
-             \"how_to_review\": \"How a reviewer finds every instance of this in a project: what to search for, and what to read\"\n    \
+             \"stories\": [\"A concrete story, from any kind of software\", \"...including where it does not apply\"],\n      \
+             \"projects\": [\"the names of the projects it applies to\"],\n      \
+             \"here\": \"How it tends to cash out in software like these projects, in one or two sentences\",\n      \
+             \"how_to_review\": \"How a reviewer with the code finds every instance of this in a project: what to search for, and what to read\"\n    \
            }}\n  \
-         ],\n  \
-           \"also_noticed\": [\"One line each: findings that matter to one project only, and defects you tripped over\"],\n  \
-           \"could_not_see\": [\"What you could not see, and what would let you\"]\n\
+         ]\n\
          }}\n\
          ```\n\n\
          Order the cards by leverage, highest first.\n",
-        projects.join("\n"),
+    )
+}
+
+/// The prompt that describes one project, for discovery to work from.
+pub fn describe_prompt(project: &Project) -> String {
+    format!(
+        "Describe the project in `{}`, your working directory, in two or three plain \
+         sentences. Say what kind of software it is, who or what uses it, what state it holds, \
+         how it is built, deployed and run, and its main languages and tools. For example: \
+         \"A streaming data API for a stock exchange, serving delayed prices to websites. \
+         Python, built with Make and Nix, deployed as a container on AWS.\"\n\n\
+         Read only what a newcomer would read first: the README, agent guidance such as \
+         AGENTS.md, manifests, and build, CI and deploy files. Do not read the source code, and \
+         do not judge the project. Do not modify anything.\n\n\
+         Reply with the sentences and nothing else.",
+        project.dir.display()
     )
 }
 
@@ -122,22 +129,27 @@ pub fn parse(reply: &str) -> Result<Landscape, String> {
     serde_json::from_str(body).map_err(|e| format!("the agent's cards are not valid JSON: {e}"))
 }
 
-/// Runs the agent, showing what it looks at as it goes, and returns its final reply.
+/// Runs the agent in `dir`, showing what it looks at as it goes, and returns its final reply.
+/// Without `access`, a Claude agent gets no tools at all.
 pub fn run(
     harness: &Harness,
     prompt: &str,
     model: Option<&str>,
-    root: &Path,
-    projects: &[Project],
+    dir: &Path,
+    access: Option<&Project>,
     timeout: Duration,
 ) -> Result<String, String> {
     let (mut cmd, stdin) = harness.command(prompt, model)?;
-    cmd.current_dir(root);
+    cmd.current_dir(dir);
     let claude = matches!(harness, Harness::Claude);
     if claude {
-        cmd.args(["--output-format", "stream-json", "--verbose", "--add-dir"]);
-        cmd.args(projects.iter().map(|p| &p.dir));
+        cmd.args(["--output-format", "stream-json", "--verbose"]);
+        if access.is_none() {
+            cmd.args(["--tools", ""]);
+        }
     }
+    let projects: Vec<Project> = access.into_iter().cloned().collect();
+    let projects = &projects[..];
     let started = Instant::now();
     let mut steps = 0;
     let mut result: Option<Result<String, String>> = None;
@@ -208,16 +220,12 @@ pub fn render(card: &Card, n: usize, of: usize, width: usize) -> String {
     for story in &card.stories {
         out += &wrap(story, "  • ", "    ", width);
     }
-    out += "\n  Here:\n";
-    for i in &card.instances {
-        out += &wrap(
-            &format!("{} · {}: {}", i.project, i.location, i.what),
-            "  → ",
-            "    ",
-            width,
-        );
-    }
-    out += &wrap(&format!("Effort: {}", card.effort), "\n  ", "  ", width);
+    out += &wrap(
+        &format!("Here ({}): {}", card.projects.join(", "), card.here),
+        "\n  ",
+        "  ",
+        width,
+    );
     out
 }
 
@@ -276,20 +284,16 @@ pub fn confirm(input: &mut impl BufRead, question: &str) -> bool {
     input.read_line(&mut line).unwrap_or(0) > 0 && !line.trim().to_lowercase().starts_with('n')
 }
 
-/// The concern directory for an accepted card: its definition, with where it was seen, and
-/// a prompt check that reviews a project for it.
+/// The concern directory for an accepted card: its definition, and a prompt check that
+/// reviews a project for it.
 pub fn accept(root: &Path, card: &Card, today: &str) -> Result<PathBuf, String> {
     let dir = root.join("crosscut/concerns").join(&card.slug);
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     let stories: String = card.stories.iter().map(|s| format!("- {s}\n")).collect();
-    let seen: String = card
-        .instances
-        .iter()
-        .map(|i| format!("- **{}** `{}`: {}\n", i.project, i.location, i.what))
-        .collect();
     let definition = format!(
-        "# {}\n\n{}\n\n## User stories\n\n{stories}\n## Seen when it was accepted ({today})\n\n{seen}\n## Decisions\n",
-        card.title, card.justification
+        "# {}\n\n{}\n\n## User stories\n\n{stories}\n## What it looks like here\n\n{}\n\n\
+         Accepted {today}.\n\n## Decisions\n",
+        card.title, card.justification, card.here
     );
     let check = format!(
         "Review this project against the rule in the concern, as a reviewer who wants every \
@@ -347,6 +351,30 @@ pub fn add_projects(root: &Path, dirs: &[PathBuf]) -> Result<(), String> {
         text.push('\n');
     }
     write(&path, &text)
+}
+
+/// A project's description, if it has one: `crosscut/about/<project>.md`.
+pub fn about(root: &Path, project: &str) -> Option<String> {
+    std::fs::read_to_string(about_path(root, project))
+        .ok()
+        .filter(|t| !t.trim().is_empty())
+}
+
+pub fn about_path(root: &Path, project: &str) -> PathBuf {
+    root.join("crosscut/about").join(format!("{project}.md"))
+}
+
+/// Shows a new description and asks whether to keep it or replace it.
+pub fn confirm_about(input: &mut impl BufRead, project: &str, text: &str, width: usize) -> String {
+    eprint!("\n{}", wrap(text, &format!("  {project}: "), "    ", width));
+    eprint!("  Enter to keep it, or type a better description > ");
+    let _ = std::io::stderr().flush();
+    let mut line = String::new();
+    let _ = input.read_line(&mut line);
+    match line.trim() {
+        "" => text.trim().to_string(),
+        better => better.to_string(),
+    }
 }
 
 pub fn write(path: &Path, text: &str) -> Result<(), String> {
