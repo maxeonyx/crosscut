@@ -81,9 +81,10 @@ pub fn projects(root: &Path) -> Result<Vec<Project>, String> {
     Ok(found)
 }
 
-/// Directories matching a relative path whose components may contain `*`.
+/// Directories matching a path, relative to `root` unless absolute, whose components may
+/// contain `*`.
 fn expand(root: &Path, pattern: &str) -> Vec<PathBuf> {
-    let mut current = vec![root.to_path_buf()];
+    let mut current = vec![root.join(if pattern.starts_with('/') { "/" } else { "" })];
     for part in pattern.split('/').filter(|p| !p.is_empty() && *p != ".") {
         let mut next = Vec::new();
         for dir in &current {

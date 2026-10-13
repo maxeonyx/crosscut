@@ -4,8 +4,10 @@
 //! The model is in docs/design.md: observations (written here) are kept apart from
 //! decisions (written by people, in each concern.md), and the map is computed from both.
 
+mod discover;
 mod harness;
 mod model;
+mod report;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -61,6 +63,8 @@ const MODES: &[&str] = &[
 
 const CELL_OPEN: &str = "<crosscut-cell>";
 const CELL_CLOSE: &str = "</crosscut-cell>";
+const FINDINGS_OPEN: &str = "<crosscut-findings>";
+const FINDINGS_CLOSE: &str = "</crosscut-findings>";
 
 #[derive(Parser)]
 #[command(
@@ -83,6 +87,41 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Have an agent propose concerns for your projects, and accept or decline each one.
+    ///
+    /// The agent reads the projects and proposes concerns, highest leverage first. Each is
+    /// shown as a card: the rule, why it holds, stories, and where it was seen here. Accepted
+    /// concerns become directories in crosscut/concerns/ with a prompt check, which is then
+    /// run to review every project for the rule. Declined ones go to crosscut/declined.md
+    /// with your reason, and are not proposed again. Creates crosscut/ here if there is none
+    /// above.
+    #[command(
+        after_help = "Examples:\n  $ crosscut discover ~/src/api ~/src/web\n  \
+        $ crosscut discover --model opus --review-model sonnet\n  \
+        $ crosscut discover --cards crosscut/landscape.json   # float the last run's cards again"
+    )]
+    Discover {
+        /// Project directories to add to crosscut/projects before discovering.
+        dirs: Vec<PathBuf>,
+        /// Float cards from this file (a previous run's crosscut/landscape.json) instead of
+        /// running the agent.
+        #[arg(long)]
+        cards: Option<PathBuf>,
+        /// Model for the reviews of accepted concerns (default: --model).
+        #[arg(long)]
+        review_model: Option<String>,
+        #[command(flatten)]
+        run: RunArgs,
+    },
+
+    /// Write crosscut/report.html: every concern, its status in each project, and what the
+    /// reviews found.
+    Report {
+        /// Directory containing crosscut/ (default: search upwards from here).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+
     /// Run concern checks for every project and record what they observe.
     ///
     /// Each cell (concern × project) runs the concern's mechanism: an executable `check`
@@ -164,7 +203,7 @@ enum Cmd {
     },
 }
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Clone)]
 struct RunArgs {
     /// Only these projects (repeatable; default: all in crosscut/projects).
     #[arg(long = "project")]
@@ -199,6 +238,17 @@ fn main() -> ExitCode {
             run,
             dry_run,
         }) => check(slugs, agentic, run, dry_run),
+        Some(Cmd::Discover {
+            dirs,
+            cards,
+            review_model,
+            run,
+        }) => discover_concerns(dirs, cards, review_model, run),
+        Some(Cmd::Report { root }) => model::find_root(root).and_then(|root| {
+            let path = report::write(&root)?;
+            println!("{}", path.display());
+            Ok(ExitCode::SUCCESS)
+        }),
         Some(Cmd::Map { project, root }) => map(project, root),
         Some(Cmd::Test {
             slugs,
@@ -342,15 +392,16 @@ impl Runner {
         }
     }
 
-    /// What one mechanism observes for one project: `(status, evidence)`, or why it could not
-    /// say. `siblings` are all the projects the cell can see, itself included.
+    /// What one mechanism observes for one project: `(status, evidence)`, with a prompt
+    /// check's findings, or why it could not say. `siblings` are all the projects the cell can
+    /// see, itself included.
     fn cell(
         &self,
         concern: &Concern,
         mechanism: &Mechanism,
         project: &Project,
         siblings: &[Project],
-    ) -> Result<(String, String), String> {
+    ) -> Result<(String, String, Option<String>), String> {
         match mechanism {
             Mechanism::Exec(path) => {
                 let mut cmd = Command::new(path);
@@ -362,7 +413,7 @@ impl Runner {
                     .map(str::trim)
                     .find(|l| !l.is_empty())
                     .unwrap_or("");
-                parse_cell(line)
+                parse_cell(line).map(|(status, evidence)| (status, evidence, None))
             }
             Mechanism::Prompt(check) => {
                 let harness = self.harness.as_ref().map_err(Clone::clone)?;
@@ -375,7 +426,15 @@ impl Runner {
                     .rfind(CELL_OPEN)
                     .ok_or("the agent's reply had no <crosscut-cell> answer")?;
                 let rest = &out[start + CELL_OPEN.len()..];
-                parse_cell(rest[..rest.find(CELL_CLOSE).unwrap_or(rest.len())].trim())
+                let (status, evidence) =
+                    parse_cell(rest[..rest.find(CELL_CLOSE).unwrap_or(rest.len())].trim())?;
+                let findings = out[..start].rfind(FINDINGS_OPEN).map(|i| {
+                    let rest = &out[i + FINDINGS_OPEN.len()..start];
+                    rest[..rest.find(FINDINGS_CLOSE).unwrap_or(rest.len())]
+                        .trim()
+                        .to_string()
+                });
+                Ok((status, evidence, findings))
             }
         }
     }
@@ -402,9 +461,13 @@ impl Runner {
              - Today: {}.\n\n\
              Do not modify any files. Read, and run only commands that do not change state. \
              This is not a bug hunt.\n\n\
-             Answer with exactly one line between `{CELL_OPEN}` and `{CELL_CLOSE}`: a status \
-             (yes, partly, missing, n/a or unknown), a colon, and one sentence of evidence. \
-             Use `unknown` with the reason when you cannot tell.\n\n\
+             First, write your findings in Markdown between `{FINDINGS_OPEN}` and \
+             `{FINDINGS_CLOSE}`: one bullet per place the concern is or is not met, each with \
+             its `path:line`, what is there, and the smallest change that would meet it. Lead \
+             with the instances that matter most. Write `None.` if there is nothing to say.\n\n\
+             Then answer with exactly one line between `{CELL_OPEN}` and `{CELL_CLOSE}`: a \
+             status (yes, partly, missing, n/a or unknown), a colon, and one sentence of \
+             evidence. Use `unknown` with the reason when you cannot tell.\n\n\
              <concern>\n{}\n</concern>\n\n<check>\n{}\n</check>\n",
             doctrine(),
             concern.name(),
@@ -586,7 +649,16 @@ fn check(
                         concern.slug, project.name
                     );
                 }
-                Ok((status, evidence)) => {
+                Ok((status, evidence, findings)) => {
+                    if let Some(findings) = findings {
+                        let dir = concern.dir.join("findings");
+                        std::fs::create_dir_all(&dir)
+                            .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+                        discover::write(
+                            &dir.join(format!("{}.md", project.name)),
+                            &format!("{findings}\n"),
+                        )?;
+                    }
                     let row = match previous {
                         // An unchanged status keeps its date, and for prompt checks its wording
                         // too, so a rerun on an unchanged world changes nothing.
@@ -631,6 +703,134 @@ fn check(
     } else {
         ExitCode::from(1)
     })
+}
+
+// ---------------------------------------------------------------------------------------
+// Discovery
+
+fn discover_concerns(
+    dirs: Vec<PathBuf>,
+    cards: Option<PathBuf>,
+    review_model: Option<String>,
+    run: RunArgs,
+) -> Result<ExitCode, String> {
+    let root = match model::find_root(run.root.clone()) {
+        Ok(root) => root,
+        Err(_) => {
+            let root = match &run.root {
+                Some(root) => root.clone(),
+                None => std::env::current_dir()
+                    .map_err(|e| format!("cannot read current directory: {e}"))?,
+            };
+            let concerns = root.join("crosscut/concerns");
+            std::fs::create_dir_all(&concerns)
+                .map_err(|e| format!("cannot create {}: {e}", concerns.display()))?;
+            root.canonicalize().unwrap_or(root)
+        }
+    };
+    discover::add_projects(&root, &dirs)?;
+    let all = model::projects(&root)?;
+    let projects = select_projects(&all, &run.projects)?;
+    if projects.is_empty() {
+        return Err("no projects to look at: pass their directories, as in \
+                    `crosscut discover ~/src/api ~/src/web`"
+            .into());
+    }
+    let today = jiff::Zoned::now().date().to_string();
+    let concerns = model::concerns(&root)?;
+
+    let landscape_path = root.join("crosscut/landscape.json");
+    let landscape = match cards {
+        Some(path) => {
+            let text = std::fs::read_to_string(&path)
+                .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+            serde_json::from_str(&text)
+                .map_err(|e| format!("{} is not a landscape: {e}", path.display()))?
+        }
+        None => {
+            let harness = Harness::resolve(run.harness.clone())?;
+            let known: Vec<String> = concerns.iter().map(|c| c.name().to_string()).collect();
+            let declined =
+                std::fs::read_to_string(root.join("crosscut/declined.md")).unwrap_or_default();
+            let prompt =
+                discover::prompt(&prompt("discover")?, &projects, &known, &declined, &today);
+            let names: Vec<&str> = projects.iter().map(|p| p.name.as_str()).collect();
+            eprintln!("Looking at {}. This takes a while.\n", names.join(", "));
+            let reply = discover::run(
+                &harness,
+                &prompt,
+                run.model.as_deref(),
+                &root,
+                &projects,
+                Duration::from_secs(run.timeout),
+            )?;
+            let landscape = discover::parse(&reply).inspect_err(|_| {
+                let _ = discover::write(&root.join("crosscut/landscape.reply.md"), &reply);
+            })?;
+            let json = serde_json::to_string_pretty(&landscape).expect("serialisable");
+            discover::write(&landscape_path, &json)?;
+            landscape
+        }
+    };
+
+    let fresh: Vec<&discover::Card> = landscape
+        .cards
+        .iter()
+        .filter(|card| !concerns.iter().any(|c| c.slug == card.slug))
+        .collect();
+    let width = std::env::var("COLUMNS")
+        .ok()
+        .and_then(|c| c.parse().ok())
+        .unwrap_or(100);
+    let mut input = std::io::stdin().lock();
+    let (mut accepted, mut declined, mut skipped) = (Vec::new(), 0, 0);
+    for (i, card) in fresh.iter().enumerate() {
+        eprint!("{}", discover::render(card, i + 1, fresh.len(), width));
+        match discover::ask(&mut input) {
+            discover::Answer::Accept => {
+                let dir = discover::accept(&root, card, &today)?;
+                eprintln!("  Accepted: {}", dir.display());
+                accepted.push(card.slug.clone());
+            }
+            discover::Answer::Decline(reason) => {
+                discover::decline(&root, card, &reason, &today)?;
+                declined += 1;
+            }
+            discover::Answer::Skip => skipped += 1,
+            discover::Answer::Quit => break,
+        }
+    }
+    eprintln!(
+        "\n{} accepted, {declined} declined, {skipped} skipped, of {} cards.",
+        accepted.len(),
+        fresh.len()
+    );
+    for (heading, lines) in [
+        ("Also noticed", &landscape.also_noticed),
+        ("Could not see", &landscape.could_not_see),
+    ] {
+        if !lines.is_empty() {
+            eprintln!("\n{heading}:");
+            for line in lines {
+                eprint!("{}", discover::wrap(line, "  - ", "    ", width));
+            }
+        }
+    }
+    if accepted.is_empty() {
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    eprintln!("\nReviewing every project for the accepted concerns.\n");
+    let review = RunArgs {
+        model: review_model.or(run.model.clone()),
+        root: Some(root.clone()),
+        ..run
+    };
+    let status = check(accepted, true, review, false)?;
+    println!();
+    map(None, Some(root.clone()))?;
+    println!("\n{}", report::write(&root)?.display());
+    Ok(status)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -798,8 +998,8 @@ fn test(slugs: Vec<String>, agentic: bool, run: RunArgs) -> Result<ExitCode, Str
     let mut wrong = 0;
     for ((concern, case, _, project, expected), result) in jobs.iter().zip(&results) {
         match result {
-            Ok((status, _)) if status == expected => {}
-            Ok((status, evidence)) => {
+            Ok((status, _, _)) if status == expected => {}
+            Ok((status, evidence, _)) => {
                 wrong += 1;
                 println!(
                     "{}/{case}/{project}: expected {expected}, observed {status}: {evidence}",

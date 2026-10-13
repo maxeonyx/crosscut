@@ -1,7 +1,8 @@
 //! Running things: executable checks, and prompts through an installed coding harness.
 
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 pub enum Harness {
@@ -143,7 +144,17 @@ fn on_path(program: &str) -> bool {
 
 /// Runs `cmd` to completion or until `timeout`, feeding `input` on stdin when given. Returns
 /// stdout, or an explanation that includes the last lines of stderr.
-pub fn run(mut cmd: Command, input: Option<&str>, timeout: Duration) -> Result<String, String> {
+pub fn run(cmd: Command, input: Option<&str>, timeout: Duration) -> Result<String, String> {
+    run_streaming(cmd, input, timeout, |_| {})
+}
+
+/// `run`, handing each line of stdout to `on_line` as it arrives.
+pub fn run_streaming(
+    mut cmd: Command,
+    input: Option<&str>,
+    timeout: Duration,
+    mut on_line: impl FnMut(&str),
+) -> Result<String, String> {
     cmd.stdin(if input.is_some() {
         Stdio::piped()
     } else {
@@ -154,7 +165,19 @@ pub fn run(mut cmd: Command, input: Option<&str>, timeout: Duration) -> Result<S
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("cannot start {:?}: {e}", cmd.get_program()))?;
-    let stdout = drain(child.stdout.take());
+    let lines = {
+        let (send, receive) = mpsc::channel();
+        let pipe = child.stdout.take().expect("stdout is piped");
+        std::thread::spawn(move || {
+            for line in BufReader::new(pipe).lines() {
+                let Ok(line) = line else { break };
+                if send.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        receive
+    };
     let stderr = drain(child.stderr.take());
     if let Some(input) = input {
         let mut pipe = child.stdin.take().expect("stdin is piped");
@@ -162,11 +185,18 @@ pub fn run(mut cmd: Command, input: Option<&str>, timeout: Duration) -> Result<S
         let _ = pipe.write_all(input.as_bytes());
     }
     let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(50)),
-            Ok(None) => {
+    let mut stdout = String::new();
+    loop {
+        match lines.recv_timeout(Duration::from_millis(50)) {
+            Ok(line) => {
+                on_line(&line);
+                stdout.push_str(&line);
+                stdout.push('\n');
+                continue;
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() < deadline => continue,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
                 let _ = child.kill();
                 let _ = child.wait();
                 return Err(format!(
@@ -174,10 +204,9 @@ pub fn run(mut cmd: Command, input: Option<&str>, timeout: Duration) -> Result<S
                     timeout.as_secs()
                 ));
             }
-            Err(e) => return Err(format!("did not finish: {e}")),
         }
-    };
-    let stdout = stdout.join().unwrap_or_default();
+    }
+    let status = child.wait().map_err(|e| format!("did not finish: {e}"))?;
     let stderr = strip_ansi(&stderr.join().unwrap_or_default());
     if !status.success() {
         let lines: Vec<&str> = stderr.lines().filter(|l| !l.trim().is_empty()).collect();
