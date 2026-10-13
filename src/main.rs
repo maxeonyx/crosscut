@@ -4,10 +4,10 @@
 //! The model is in docs/design.md: observations (written here) are kept apart from
 //! decisions (written by people, in each concern.md), and the map is computed from both.
 
-mod discover;
 mod harness;
 mod model;
 mod report;
+mod unpack;
 mod workspace;
 
 use std::io::IsTerminal;
@@ -32,10 +32,7 @@ const SKILL_FILES: &[(&str, &str)] = &[
     ("catalogue.md", include_str!("../skill/catalogue.md")),
     ("reservoirs.md", include_str!("../skill/reservoirs.md")),
     ("modes/setup.md", include_str!("../skill/modes/setup.md")),
-    (
-        "modes/discover.md",
-        include_str!("../skill/modes/discover.md"),
-    ),
+    ("modes/unpack.md", include_str!("../skill/modes/unpack.md")),
     (
         "modes/establish.md",
         include_str!("../skill/modes/establish.md"),
@@ -56,7 +53,7 @@ const SKILL_FILES: &[(&str, &str)] = &[
 
 const MODES: &[&str] = &[
     "setup",
-    "discover",
+    "unpack",
     "establish",
     "refresh",
     "reconsider",
@@ -97,13 +94,11 @@ enum Cmd {
     /// run to review every project for the rule. Declined ones go to crosscut/declined.md
     /// with your reason, and are not proposed again. Creates crosscut/ here if there is none
     /// above.
-    #[command(
-        after_help = "Examples:\n  $ crosscut discover ~/src/api ~/src/web\n  \
-        $ crosscut discover --model opus --review-model sonnet\n  \
-        $ crosscut discover --cards crosscut/landscape.json   # float the last run's cards again"
-    )]
-    Discover {
-        /// Project directories to add to crosscut/projects before discovering.
+    #[command(after_help = "Examples:\n  $ crosscut unpack ~/src/api ~/src/web\n  \
+        $ crosscut unpack --model opus --review-model sonnet\n  \
+        $ crosscut unpack --cards crosscut/landscape.json   # float the last run's cards again")]
+    Unpack {
+        /// Project directories to add to crosscut/projects before unpacking.
         dirs: Vec<PathBuf>,
         /// Float cards from this file (a previous run's crosscut/landscape.json) instead of
         /// running the agent.
@@ -186,7 +181,7 @@ enum Cmd {
 
     /// Print the full prompt for one mode of work, with the doctrine and references inlined.
     #[command(
-        after_help = "Modes: setup, discover, establish, refresh, reconsider, generalize\n\n\
+        after_help = "Modes: setup, unpack, establish, refresh, reconsider, generalize\n\n\
         Examples:\n  $ crosscut prompt setup | claude -p\n  $ crosscut prompt establish > /tmp/prompt.md"
     )]
     Prompt { mode: String },
@@ -242,12 +237,12 @@ fn main() -> ExitCode {
             run,
             dry_run,
         }) => check(slugs, agentic, run, dry_run),
-        Some(Cmd::Discover {
+        Some(Cmd::Unpack {
             dirs,
             cards,
             review_model,
             run,
-        }) => discover_concerns(dirs, cards, review_model, run),
+        }) => unpack_concerns(dirs, cards, review_model, run),
         Some(Cmd::Report { root }) => model::find_root(root).and_then(|root| {
             let path = report::write(&root)?;
             println!("{}", path.display());
@@ -306,14 +301,14 @@ fn orientation() -> String {
          ## If you are an agent asked to use CrossCut\n\n\
          Load the mode that fits, and follow it:\n\n  \
          crosscut prompt setup        \"use CrossCut here\"\n  \
-         crosscut prompt discover     \"what are we not thinking about?\"\n  \
+         crosscut prompt unpack       \"what are we not thinking about?\"\n  \
          crosscut prompt establish    add one concern, with its check and fixtures\n  \
          crosscut prompt refresh      update the map\n  \
          crosscut prompt reconsider   should a concern or its mechanism still exist?\n  \
          crosscut prompt generalize   what does the work just done reveal?\n\n\
          Or run `crosscut install-skill` once, and your harness will load the same\n\
          material as the `crosscut` skill.\n\n\
-         Commands: `crosscut discover`, `crosscut check`, `crosscut map`, `crosscut test`, \
+         Commands: `crosscut unpack`, `crosscut check`, `crosscut map`, `crosscut test`, \
          `crosscut report`. See `crosscut --help`.\n",
         doctrine()
     )
@@ -330,7 +325,7 @@ fn prompt(mode: &str) -> Result<String, String> {
     if mode == "setup" {
         refs.push("modes/establish.md".into());
     }
-    if matches!(mode, "setup" | "discover") {
+    if matches!(mode, "setup" | "unpack") {
         refs.push("catalogue.md".into());
         refs.push("reservoirs.md".into());
     }
@@ -659,7 +654,7 @@ fn check(
                         let dir = concern.dir.join("findings");
                         std::fs::create_dir_all(&dir)
                             .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-                        discover::write(
+                        unpack::write(
                             &dir.join(format!("{}.md", project.name)),
                             &format!("{findings}\n"),
                         )?;
@@ -711,9 +706,9 @@ fn check(
 }
 
 // ---------------------------------------------------------------------------------------
-// Discovery
+// Unpacking
 
-/// Bare `crosscut` for a person. In a workspace, show its map and offer more discovery.
+/// Bare `crosscut` for a person. In a workspace, show its map and offer to unpack more.
 /// Anywhere else, say what CrossCut needs, recommend making a workspace of fresh clones, and
 /// say what to do instead.
 fn welcome() -> Result<ExitCode, String> {
@@ -728,11 +723,11 @@ fn welcome() -> Result<ExitCode, String> {
     };
     if let Ok(root) = model::find_root(None) {
         map(None, Some(root.clone()))?;
-        if !discover::confirm(&mut input, "\nLook for more concerns?") {
+        if !unpack::confirm(&mut input, "\nLook for more concerns?") {
             return Ok(ExitCode::SUCCESS);
         }
-        drop(input); // discovery reads stdin too
-        return discover_concerns(Vec::new(), None, None, run);
+        drop(input); // unpacking reads stdin too
+        return unpack_concerns(Vec::new(), None, None, run);
     }
 
     let here =
@@ -759,7 +754,7 @@ fn welcome() -> Result<ExitCode, String> {
         "\nCrossCut: cross-cutting concerns, kept visible across your repositories.\n\n\
          To find the concerns worth applying to your code, it needs the repositories cloned side by side in a workspace. If you let it, it sets that up for you: pick repositories{}, and they are cloned fresh into {}. Your own checkouts are never touched.\n\n\
          It then uses your existing coding agent to review your code. {}\n\n\
-         Instead, to use checkouts in place: crosscut discover ~/src/api ~/src/web",
+         Instead, to use checkouts in place: crosscut unpack ~/src/api ~/src/web",
         if repos.is_empty() {
             format!(
                 " as owner/name (none found in {} or three levels below)",
@@ -789,7 +784,7 @@ fn welcome() -> Result<ExitCode, String> {
     let _ = std::io::Write::flush(&mut std::io::stderr());
     let mut line = String::new();
     let _ = std::io::BufRead::read_line(&mut input, &mut line);
-    drop(input); // discovery reads stdin too
+    drop(input); // unpacking reads stdin too
     let workspace = match line.trim() {
         "" => suggested,
         path => match path.strip_prefix("~/") {
@@ -805,7 +800,7 @@ fn welcome() -> Result<ExitCode, String> {
         tilde(&workspace),
         harness.name()
     );
-    discover_concerns(
+    unpack_concerns(
         dirs,
         None,
         None,
@@ -830,7 +825,7 @@ fn tilde(path: &Path) -> String {
     }
 }
 
-fn discover_concerns(
+fn unpack_concerns(
     dirs: Vec<PathBuf>,
     cards: Option<PathBuf>,
     review_model: Option<String>,
@@ -850,12 +845,12 @@ fn discover_concerns(
             root.canonicalize().unwrap_or(root)
         }
     };
-    discover::add_projects(&root, &dirs)?;
+    unpack::add_projects(&root, &dirs)?;
     let all = model::projects(&root)?;
     let projects = select_projects(&all, &run.projects)?;
     if projects.is_empty() {
         return Err("no projects to look at: pass their directories, as in \
-                    `crosscut discover ~/src/api ~/src/web`"
+                    `crosscut unpack ~/src/api ~/src/web`"
             .into());
     }
     let today = jiff::Zoned::now().date().to_string();
@@ -873,26 +868,26 @@ fn discover_concerns(
         None => {
             let harness = Harness::resolve(run.harness.clone())?;
             let timeout = Duration::from_secs(run.timeout);
-            // Discovery works from short descriptions, never from the code.
+            // Unpacking works from short descriptions, never from the code.
             let mut about = Vec::new();
             for project in &projects {
-                let text = match discover::about(&root, &project.name) {
+                let text = match unpack::about(&root, &project.name) {
                     Some(text) => text,
                     None => {
                         eprintln!("Describing {} from its README and manifests.", project.name);
-                        let draft = discover::run(
+                        let draft = unpack::run(
                             &harness,
-                            &discover::describe_prompt(project),
+                            &unpack::describe_prompt(project),
                             review_model.as_deref().or(run.model.as_deref()),
                             &project.dir,
                             Some(project),
                             timeout,
                         )?;
-                        let text = discover::confirm_about(&mut input, &project.name, &draft);
-                        let path = discover::about_path(&root, &project.name);
+                        let text = unpack::confirm_about(&mut input, &project.name, &draft);
+                        let path = unpack::about_path(&root, &project.name);
                         std::fs::create_dir_all(path.parent().expect("in crosscut/about"))
                             .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
-                        discover::write(&path, &format!("{text}\n"))?;
+                        unpack::write(&path, &format!("{text}\n"))?;
                         text
                     }
                 };
@@ -901,12 +896,12 @@ fn discover_concerns(
             let known: Vec<String> = concerns.iter().map(|c| c.name().to_string()).collect();
             let declined =
                 std::fs::read_to_string(root.join("crosscut/declined.md")).unwrap_or_default();
-            let prompt = discover::prompt(&prompt("discover")?, &about, &known, &declined);
+            let prompt = unpack::prompt(&prompt("unpack")?, &about, &known, &declined);
             eprintln!(
-                "\nThinking about concerns for {}, from their descriptions alone. This takes a few minutes.",
+                "\nUnpacking concerns for {}, from their descriptions alone. This takes a few minutes.",
                 about.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(", ")
             );
-            let reply = discover::run(
+            let reply = unpack::run(
                 &harness,
                 &prompt,
                 run.model.as_deref(),
@@ -914,35 +909,35 @@ fn discover_concerns(
                 None,
                 timeout,
             )?;
-            let landscape = discover::parse(&reply).inspect_err(|_| {
-                let _ = discover::write(&root.join("crosscut/landscape.reply.md"), &reply);
+            let landscape = unpack::parse(&reply).inspect_err(|_| {
+                let _ = unpack::write(&root.join("crosscut/landscape.reply.md"), &reply);
             })?;
             let json = serde_json::to_string_pretty(&landscape).expect("serialisable");
-            discover::write(&landscape_path, &json)?;
+            unpack::write(&landscape_path, &json)?;
             landscape
         }
     };
 
-    let fresh: Vec<&discover::Card> = landscape
+    let fresh: Vec<&unpack::Card> = landscape
         .cards
         .iter()
         .filter(|card| !concerns.iter().any(|c| c.slug == card.slug))
         .collect();
     let (mut accepted, mut declined, mut skipped) = (Vec::new(), 0, 0);
     for (i, card) in fresh.iter().enumerate() {
-        eprint!("{}", discover::render(card, i + 1, fresh.len()));
-        match discover::ask(&mut input) {
-            discover::Answer::Accept => {
-                let dir = discover::accept(&root, card, &today)?;
+        eprint!("{}", unpack::render(card, i + 1, fresh.len()));
+        match unpack::ask(&mut input) {
+            unpack::Answer::Accept => {
+                let dir = unpack::accept(&root, card, &today)?;
                 eprintln!("  Accepted: {}", dir.display());
                 accepted.push(card.slug.clone());
             }
-            discover::Answer::Decline(reason) => {
-                discover::decline(&root, card, &reason, &today)?;
+            unpack::Answer::Decline(reason) => {
+                unpack::decline(&root, card, &reason, &today)?;
                 declined += 1;
             }
-            discover::Answer::Skip => skipped += 1,
-            discover::Answer::Quit => break,
+            unpack::Answer::Skip => skipped += 1,
+            unpack::Answer::Quit => break,
         }
     }
     drop(input);

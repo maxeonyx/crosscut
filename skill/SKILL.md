@@ -257,7 +257,7 @@ it with older copies. The concepts are replicas and the session guarantees:
 monotonic reads and read-your-writes, which versions make checkable. The rule
 is: "A stale copy should never overwrite a fresher one."
 
-### Discovering concerns: go on and on
+### Unpacking concerns: go on and on
 
 Concerns are real. There is a common landscape of them out in the world,
 shared by most software, and many of them could simply never be automated
@@ -277,7 +277,7 @@ The seed set is nothing like a checklist:
   software it does not suit. Every instance in a good landscape comes from the
   software in front of you.
 
-Discovery finds which concerns apply to these kinds of software, including
+Unpacking finds which concerns apply to these kinds of software, including
 the ones no seed anticipated. It works from a short description of each
 project, never from the code, so that every card starts as a rule and not as
 a bug. Review, with the code, finds the concrete instances in this person's
@@ -315,7 +315,7 @@ only history? Can some whole concern disappear if we eliminate the thing
 underneath it? That is still only an intuition pump. Generate much more from
 the actual software.
 
-A discovery prompt that says "think broadly about engineering concerns" has
+An unpacking prompt that says "think broadly about engineering concerns" has
 failed. **Lead by example**, with heterogeneous concrete reservoirs, and then
 demand further project-specific expansion. Push across:
 - **project shapes:** a tiny personal CLI and a public one; an internal API
@@ -361,7 +361,7 @@ that should **not** share an abstraction.
 ### Making concerns persistent: a high bar
 
 Nothing persists, not even the skill, until the human is sold on the value.
-The first experience is discovery: it ends when they decide whether CrossCut
+The first experience is unpacking: it ends when they decide whether CrossCut
 will be valuable for them. Help them find out that it is *not* valuable as
 early as possible, although we hope it will be.
 
@@ -374,7 +374,7 @@ actually managed, so CrossCut helps people get there step by step:
 - and add concerns one at a time in reaction to real goings-on: an incident,
   a bug that generalises, a new project, a change in the system.
 
-Discovering concerns and implementing a persistent concern are separate
+Unpacking concerns and implementing a persistent concern are separate
 capabilities. CrossCut must be excellent at both.
 
 ### Keeping a concern visible: the lightest strong mechanism
@@ -495,13 +495,13 @@ These are modes of thought, not a pipeline. Move between them freely.
 | Situation | Read |
 |---|---|
 | "Use CrossCut here", or setting up a project or ecosystem | [modes/setup.md](modes/setup.md) |
-| "What are we not thinking about?" | [modes/discover.md](modes/discover.md) |
+| "What are we not thinking about?" | [modes/unpack.md](modes/unpack.md) |
 | "I care about X", or making one concern persistent | [modes/establish.md](modes/establish.md) |
 | Updating the map | [modes/refresh.md](modes/refresh.md) |
 | Questioning whether a concern or its mechanism should exist | [modes/reconsider.md](modes/reconsider.md) |
 | Just fixed or built something, and wondering what it reveals | [modes/generalize.md](modes/generalize.md) |
 
-- Setup and discovery start from [catalogue.md](catalogue.md), which holds
+- Setup and unpacking start from [catalogue.md](catalogue.md), which holds
   seed concerns most software eventually meets, and from
   [reservoirs.md](reservoirs.md), which holds the people, moments and shapes
   that suggest more. Both lead by example, and neither is a checklist.
@@ -560,7 +560,7 @@ If `crosscut` is on `PATH`:
 
 | Command | What it does |
 |---|---|
-| `crosscut discover [dir...]` | An agent proposes concerns as cards; the person accepts or declines each. Accepted ones become concerns with a prompt check, and are reviewed in every project. Declined ones are not proposed again. |
+| `crosscut unpack [dir...]` | An agent proposes concerns as cards from short descriptions of the projects; the person accepts or declines each. Accepted ones become concerns with a prompt check, and are reviewed in every project. Declined ones are not proposed again. |
 | `crosscut check [slug...]` | Runs machine checks (tiers 1 and 2) per project, and records observations. `--agentic` adds prompt checks, which cost model calls. |
 | `crosscut map [--project p]` | Shows every concern against every project, combining decisions and observations. |
 | `crosscut test [slug...]` | Runs each mechanism against its fixtures. `--agentic` includes prompt checks. |

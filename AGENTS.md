@@ -35,10 +35,10 @@ This repository builds the tool. Its tests, evaluations and demos use invented e
 | `skill/` | The product's knowledge: SKILL.md (doctrine and map), `modes/`, `catalogue.md` (seed concerns), `reservoirs.md`, and `concern-files.md` (the file conventions and the README template). |
 | `src/model.rs` | The files CrossCut reads and writes: `crosscut/projects`, `concerns/<slug>/concern.md` with its decisions, and `observed.tsv`. |
 | `src/harness.rs` | Running processes with timeouts and drained pipes, and invoking claude, codex or opencode headless. |
-| `src/discover.rs` | `crosscut discover`: the discovery prompt, streaming the agent's progress, floating cards, and writing accepted and declined ones. |
+| `src/unpack.rs` | `crosscut unpack`: describing each project, the unpacking prompt, streaming the agent's progress, floating cards, and writing accepted and declined ones. |
 | `src/workspace.rs` | Bare `crosscut` for a person: finding the repositories on this machine, and cloning the chosen ones into a workspace. |
 | `src/report.rs` | `crosscut/report.html`, generated from the files. |
-| `src/main.rs` | The CLI: `discover`, `check`, `map`, `test`, `report`, `prompt`, `install-skill`. The skill is embedded with `include_str!`, so a new skill file must be added to `SKILL_FILES`. |
+| `src/main.rs` | The CLI: `unpack`, `check`, `map`, `test`, `report`, `prompt`, `install-skill`. The skill is embedded with `include_str!`, so a new skill file must be added to `SKILL_FILES`. |
 | `tests/cli.rs` | Black-box tests against private copies of Juniper. Prompt checks use shell stand-ins, never a real model. |
 | `tests/fixtures/juniper/` | The invented ecosystem, with concerns at all three tiers, a decision, and fixtures. |
 | `docs/design.md` | Why CrossCut has this shape: episodes, candidates, flows, and open questions. Update it when the shape changes. |

@@ -39,7 +39,7 @@ pub fn write(root: &Path) -> Result<PathBuf, String> {
     });
     let data = data.to_string().replace("</", "<\\/");
     let path = root.join("crosscut/report.html");
-    crate::discover::write(&path, &PAGE.replace("/*DATA*/null", &data))?;
+    crate::unpack::write(&path, &PAGE.replace("/*DATA*/null", &data))?;
     Ok(path)
 }
 

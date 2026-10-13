@@ -1,8 +1,8 @@
-# Discover: "What are we not thinking about?"
+# Unpack: "What are we not thinking about?"
 
 This mode proposes concerns that are not on the map yet. Each one is a card the person can accept or decline. It persists nothing unless the person accepts.
 
-**Discover from a description of each project, never from its code.** A short description is all you need: "a streaming data API for a stock exchange, Python, built with Make and Nix". Software of that kind meets a known landscape of concerns, and your job is to lay that landscape out. Reading the code pulls you towards the bugs in it, and a card that starts from a bug stays a bug report however you word it. Once the person accepts a concern, a reviewer with the code finds where it cashes out in each project. That review is a separate step, and it is not yours.
+**Unpack from a description of each project, never from its code.** A short description is all you need: "a streaming data API for a stock exchange, Python, built with Make and Nix". Software of that kind meets a known landscape of concerns, and your job is to lay that landscape out. Reading the code pulls you towards the bugs in it, and a card that starts from a bug stays a bug report however you word it. Once the person accepts a concern, a reviewer with the code finds where it cashes out in each project. That review is a separate step, and it is not yours.
 
 If you are working inside a session that can see the code, do not read it for this mode. If you have no description, write one first from the README, the agent guidance and the manifests, in two or three sentences, and stop reading there.
 

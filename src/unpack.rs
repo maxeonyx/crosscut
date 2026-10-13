@@ -1,9 +1,9 @@
-//! `crosscut discover`: each project is described in a few sentences, an agent proposes
+//! `crosscut unpack`: each project is described in a few sentences, an agent proposes
 //! concerns from those descriptions alone, the person accepts or declines each one, and
 //! accepted concerns become concern directories whose prompt check reviews the code.
 //!
-//! Discovery never sees the code. A concern found in code starts life as one bug and has to
-//! be argued back up to a rule; a concern found from a description can only be the rule. The
+//! Unpacking never sees the code. A concern found in code starts life as one bug and has to
+//! be argued back up to a rule; a concern unpacked from a description can only be the rule. The
 //! review is what finds where each rule cashes out.
 
 use std::io::{BufRead, Write};
@@ -18,7 +18,7 @@ use crate::model::{self, Project};
 const CARDS_OPEN: &str = "<crosscut-cards>";
 const CARDS_CLOSE: &str = "</crosscut-cards>";
 
-/// What one discovery run proposes. It is written to `crosscut/landscape.json`, so the cards
+/// What one unpacking run proposes. It is written to `crosscut/landscape.json`, so the cards
 /// can be floated again without another run.
 #[derive(Serialize, Deserialize)]
 pub struct Landscape {
@@ -45,7 +45,7 @@ pub enum Answer {
     Quit,
 }
 
-/// The prompt for one discovery run: the discover mode with the doctrine and seeds, then the
+/// The prompt for one unpacking run: the unpack mode with the doctrine and seeds, then the
 /// projects' descriptions, what is already decided, and the answer format.
 pub fn prompt(
     mode_prompt: &str,
@@ -69,7 +69,7 @@ pub fn prompt(
     };
     format!(
         "{mode_prompt}\n\n---\n\n# Your task\n\n\
-         Discover concerns for these projects, as the discover mode above describes. You have \
+         Unpack concerns for these projects, as the unpack mode above describes. You have \
          their descriptions and nothing else: no code, and no tools. No human is available \
          until you finish: the person will see your cards one at a time, and accept or decline \
          each. A reviewer with the code will then look for each accepted rule in every \
@@ -99,7 +99,7 @@ pub fn prompt(
     )
 }
 
-/// The prompt that describes one project, for discovery to work from.
+/// The prompt that describes one project, for unpacking to work from.
 pub fn describe_prompt(project: &Project) -> String {
     format!(
         "Describe the project in `{}`, your working directory, in two or three plain \
@@ -296,7 +296,7 @@ pub fn accept(root: &Path, card: &Card, today: &str) -> Result<PathBuf, String> 
 pub fn decline(root: &Path, card: &Card, reason: &str, today: &str) -> Result<(), String> {
     let path = root.join("crosscut/declined.md");
     let mut text = std::fs::read_to_string(&path).unwrap_or_else(|_| {
-        "# Declined\n\nConcerns proposed and declined. Discovery reads this, and does not \
+        "# Declined\n\nConcerns proposed and declined. Unpacking reads this, and does not \
          propose them again.\n\n"
             .into()
     });

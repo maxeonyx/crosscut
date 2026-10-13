@@ -121,7 +121,7 @@ fn bare_invocation_orients_an_agent_with_the_doctrine() {
 fn every_mode_prompt_carries_the_doctrine_and_its_references() {
     for mode in [
         "setup",
-        "discover",
+        "unpack",
         "establish",
         "refresh",
         "reconsider",
@@ -142,7 +142,7 @@ fn every_mode_prompt_carries_the_doctrine_and_its_references() {
         assert!(out.contains(&format!("<!-- modes/{mode}.md -->")), "{mode}");
         assert!(!out.starts_with("---"), "{mode} prompt leaked frontmatter");
     }
-    for mode in ["setup", "discover"] {
+    for mode in ["setup", "unpack"] {
         let out = text(
             &crosscut()
                 .args(["prompt", mode])
@@ -173,7 +173,7 @@ fn unknown_mode_names_the_real_ones() {
             .stderr,
     );
     assert!(
-        err.contains("setup, discover, establish, refresh, reconsider, generalize"),
+        err.contains("setup, unpack, establish, refresh, reconsider, generalize"),
         "{err}"
     );
 }
@@ -698,14 +698,14 @@ fn map_with_no_concerns_says_how_to_add_one() {
     );
 }
 
-// --- discover --------------------------------------------------------------------------
+// --- unpack ----------------------------------------------------------------------------
 
 /// A stand-in agent: describes a project, proposes two cards from descriptions, and reviews
 /// to a cell prompt. It saves each prompt it is given, so tests can read them.
-const DISCOVERY_AGENT: &str = r#"p=$(cat); n=$(ls "$PROMPTS" 2>/dev/null | wc -l); mkdir -p "$PROMPTS"; printf '%s' "$p" > "$PROMPTS/$n.md"
+const UNPACKING_AGENT: &str = r#"p=$(cat); n=$(ls "$PROMPTS" 2>/dev/null | wc -l); mkdir -p "$PROMPTS"; printf '%s' "$p" > "$PROMPTS/$n.md"
 case "$p" in
 *'Describe the project in'*) echo 'A small Python API that serves records.';;
-*'Discover concerns for these projects'*) cat <<'JSON'
+*'Unpack concerns for these projects'*) cat <<'JSON'
 Thinking out loud first.
 <crosscut-cards>
 {"cards": [
@@ -735,11 +735,11 @@ fn workspace() -> tempfile::TempDir {
     dir
 }
 
-fn discover(dir: &Path, args: &[&str], answers: &str) -> (String, String) {
+fn unpack(dir: &Path, args: &[&str], answers: &str) -> (String, String) {
     let out = crosscut()
-        .arg("discover")
+        .arg("unpack")
         .args(args)
-        .args(["--harness", DISCOVERY_AGENT])
+        .args(["--harness", UNPACKING_AGENT])
         .env("PROMPTS", dir.join("prompts"))
         .current_dir(dir)
         .write_stdin(answers)
@@ -755,11 +755,11 @@ fn prompt_number(dir: &Path, n: usize) -> String {
 }
 
 #[test]
-fn discover_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
+fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
     let ws = workspace();
     let dir = ws.path();
     // Keep the description, accept the first card, decline the second.
-    let (out, err) = discover(dir, &["api"], "\na\nd\nwe already show refresh times\n");
+    let (out, err) = unpack(dir, &["api"], "\na\nd\nwe already show refresh times\n");
 
     assert!(
         err.contains("api: A small Python API that serves records."),
@@ -826,41 +826,41 @@ fn discover_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted()
 }
 
 #[test]
-fn discovery_sees_descriptions_not_code() {
+fn unpacking_sees_descriptions_not_code() {
     let ws = workspace();
     let dir = ws.path();
-    discover(dir, &["api"], "a much better description\nq\n");
+    unpack(dir, &["api"], "a much better description\nq\n");
     assert!(prompt_number(dir, 0).contains("Describe the project in"));
-    let discovery = prompt_number(dir, 1);
+    let unpacking = prompt_number(dir, 1);
     assert!(
-        discovery.contains("### `api`\n\na much better description"),
-        "{discovery}"
+        unpacking.contains("### `api`\n\na much better description"),
+        "{unpacking}"
     );
     assert!(
-        !discovery.contains(&*dir.join("api").to_string_lossy()),
+        !unpacking.contains(&*dir.join("api").to_string_lossy()),
         "no paths to the code"
     );
     assert!(
-        discovery.contains(CARRY_FORWARD),
+        unpacking.contains(CARRY_FORWARD),
         "the doctrine travels with the prompt"
     );
     assert!(
-        discovery.contains("never from its code"),
-        "the discover mode is included"
+        unpacking.contains("never from its code"),
+        "the unpack mode is included"
     );
     assert!(
-        discovery.contains("Elapsed time should be measured with a monotonic clock"),
+        unpacking.contains("Elapsed time should be measured with a monotonic clock"),
         "and the seeds"
     );
 }
 
 #[test]
-fn the_next_discovery_reuses_descriptions_and_knows_what_was_kept_and_declined() {
+fn the_next_unpacking_reuses_descriptions_and_knows_what_was_kept_and_declined() {
     let ws = workspace();
     let dir = ws.path();
-    discover(dir, &["api"], "\na\nd\nwe already show refresh times\n");
-    discover(dir, &[], "q\n");
-    // Prompts: describe, discover, review, then only the second discovery.
+    unpack(dir, &["api"], "\na\nd\nwe already show refresh times\n");
+    unpack(dir, &[], "q\n");
+    // Prompts: describe, unpack, review, then only the second unpacking.
     assert_eq!(fs::read_dir(dir.join("prompts")).unwrap().count(), 4);
     let second = prompt_number(dir, 3);
     assert!(
@@ -879,8 +879,8 @@ fn the_next_discovery_reuses_descriptions_and_knows_what_was_kept_and_declined()
 fn saved_cards_float_again_without_an_agent_minus_those_already_kept() {
     let ws = workspace();
     let dir = ws.path();
-    discover(dir, &["api"], "\na\nq\n");
-    let (_, err) = discover(dir, &["--cards", "crosscut/landscape.json"], "s\n");
+    unpack(dir, &["api"], "\na\nq\n");
+    let (_, err) = unpack(dir, &["--cards", "crosscut/landscape.json"], "s\n");
     assert!(
         err.contains("[1/1]  Derived data that can go stale"),
         "{err}"
@@ -888,7 +888,7 @@ fn saved_cards_float_again_without_an_agent_minus_those_already_kept() {
     assert_eq!(
         fs::read_dir(dir.join("prompts")).unwrap().count(),
         3,
-        "describe, discover, review: no new agent run"
+        "describe, unpack, review: no new agent run"
     );
 }
 
@@ -899,7 +899,7 @@ fn an_unreadable_answer_is_kept_for_inspection() {
     fs::write(ws.path().join("crosscut/about/api.md"), "An API.\n").unwrap();
     let out = crosscut()
         .args([
-            "discover",
+            "unpack",
             "api",
             "--harness",
             "cat >/dev/null; echo 'no cards here'",

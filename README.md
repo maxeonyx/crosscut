@@ -17,8 +17,8 @@ version-visibility  missing   yes         deferred      yes
 
 ```bash
 cargo install --git https://github.com/maxeonyx/crosscut --locked
-crosscut                      # at a terminal: finds your projects, then discovers; an agent gets instructions
-crosscut discover ~/src/*      # an agent proposes concerns; accept or decline each, and the accepted ones are reviewed
+crosscut                      # at a terminal: sets up a workspace of your repositories, then unpacks; an agent gets instructions
+crosscut unpack ~/src/*        # an agent proposes concerns; accept or decline each, and the accepted ones are reviewed
 crosscut install-skill        # teach Claude Code, Codex and OpenCode how to use it
 crosscut check                # run the machine checks; --agentic adds the prompt checks
 crosscut map                  # the grid
