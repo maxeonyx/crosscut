@@ -211,44 +211,27 @@ fn describe_tool(block: &serde_json::Value, projects: &[Project]) -> String {
     format!("{name:<5} {detail}")
 }
 
-/// One card, laid out for a terminal `width` columns wide.
-pub fn render(card: &Card, n: usize, of: usize, width: usize) -> String {
-    let width = width.clamp(60, 110);
+/// One card, laid out for a terminal.
+pub fn render(card: &Card, n: usize, of: usize) -> String {
     let mut out = format!("\n[{n}/{of}]  {}\n\n", card.title);
-    out += &wrap(&card.justification, "  ", "  ", width);
+    out += &line("  ", &card.justification);
     out += "\n";
     for story in &card.stories {
-        out += &wrap(story, "  • ", "    ", width);
+        out += &line("  • ", story);
     }
-    out += &wrap(
-        &format!("Here ({}): {}", card.projects.join(", "), card.here),
+    out += &line(
         "\n  ",
-        "  ",
-        width,
+        &format!("Here ({}): {}", card.projects.join(", "), card.here),
     );
     out
 }
 
-pub fn wrap(text: &str, first: &str, rest: &str, width: usize) -> String {
-    let mut out = String::new();
-    let mut line = first.to_string();
-    let mut empty = true;
-    for word in text.split_whitespace() {
-        if !empty && line.chars().count() + 1 + word.chars().count() > width {
-            out += &line;
-            out.push('\n');
-            line = rest.to_string();
-            empty = true;
-        }
-        if !empty {
-            line.push(' ');
-        }
-        line += word;
-        empty = false;
-    }
-    out += &line;
-    out.push('\n');
-    out
+/// One paragraph on one line after `prefix`, for the terminal to wrap at its own width.
+pub fn line(prefix: &str, text: &str) -> String {
+    format!(
+        "{prefix}{}\n",
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
+    )
 }
 
 /// Asks for one card's answer on `input`, prompting on stderr.
@@ -365,8 +348,8 @@ pub fn about_path(root: &Path, project: &str) -> PathBuf {
 }
 
 /// Shows a new description and asks whether to keep it or replace it.
-pub fn confirm_about(input: &mut impl BufRead, project: &str, text: &str, width: usize) -> String {
-    eprint!("\n{}", wrap(text, &format!("  {project}: "), "    ", width));
+pub fn confirm_about(input: &mut impl BufRead, project: &str, text: &str) -> String {
+    eprint!("\n{}", line(&format!("  {project}: "), text));
     eprint!("  Enter to keep it, or type a better description > ");
     let _ = std::io::stderr().flush();
     let mut line = String::new();

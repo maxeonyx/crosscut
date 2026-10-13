@@ -737,9 +737,14 @@ fn welcome() -> Result<ExitCode, String> {
 
     let here =
         std::env::current_dir().map_err(|e| format!("cannot read current directory: {e}"))?;
-    // The list may scroll off the top. What must be read sits at the bottom, next to the
-    // prompt, and number 1, the most recently used repository, is nearest to it.
+    // The list may scroll off the top, under a header nobody needs to read. What must be read
+    // sits at the bottom, next to the prompt, and number 1, the most recently used repository,
+    // is nearest to it.
     let repos = workspace::find(&here, 3);
+    eprintln!("CrossCut: cross-cutting concerns, kept visible across your repositories.\n");
+    if !repos.is_empty() {
+        eprintln!("Repositories on this machine:");
+    }
     for (i, repo) in repos.iter().enumerate().rev() {
         let clones = match repo.clones.len() {
             1 => tilde(&repo.clones[0]),
@@ -749,18 +754,12 @@ fn welcome() -> Result<ExitCode, String> {
     }
     let suggested = here.join("crosscut-workspace");
     let harness = Harness::resolve(None);
+    // One line per paragraph: the terminal wraps them to its own width.
     eprintln!(
-        "\nCrossCut: an agent reads your repositories and proposes concerns worth keeping visible.\n\n\
-         It needs the repositories cloned side by side in a workspace, and a logged-in coding\n\
-         agent: claude, codex or opencode. {}\n\
-         Recommended: pick repositories{}.\n\
-         They are cloned fresh into {}.\n\
-         Your own checkouts are never touched.\n\
+        "\nCrossCut: cross-cutting concerns, kept visible across your repositories.\n\n\
+         To find the concerns worth applying to your code, it needs the repositories cloned side by side in a workspace. If you let it, it sets that up for you: pick repositories{}, and they are cloned fresh into {}. Your own checkouts are never touched.\n\n\
+         It then uses your existing coding agent to review your code. {}\n\n\
          Instead, to use checkouts in place: crosscut discover ~/src/api ~/src/web",
-        match &harness {
-            Ok(h) => format!("Found: {}.", h.name()),
-            Err(_) => "None found.".into(),
-        },
         if repos.is_empty() {
             format!(
                 " as owner/name (none found in {} or three levels below)",
@@ -769,7 +768,11 @@ fn welcome() -> Result<ExitCode, String> {
         } else {
             " above (1 is the one you used last)".into()
         },
-        tilde(&suggested)
+        tilde(&suggested),
+        match &harness {
+            Ok(h) => format!("Found: {}.", h.name()),
+            Err(_) => "None found: install and log in to claude, codex or opencode.".into(),
+        },
     );
     if suggested.join("crosscut").is_dir() {
         eprintln!(
@@ -857,10 +860,6 @@ fn discover_concerns(
     }
     let today = jiff::Zoned::now().date().to_string();
     let concerns = model::concerns(&root)?;
-    let width = std::env::var("COLUMNS")
-        .ok()
-        .and_then(|c| c.parse().ok())
-        .unwrap_or(100);
     let mut input = std::io::stdin().lock();
 
     let landscape_path = root.join("crosscut/landscape.json");
@@ -889,8 +888,7 @@ fn discover_concerns(
                             Some(project),
                             timeout,
                         )?;
-                        let text =
-                            discover::confirm_about(&mut input, &project.name, &draft, width);
+                        let text = discover::confirm_about(&mut input, &project.name, &draft);
                         let path = discover::about_path(&root, &project.name);
                         std::fs::create_dir_all(path.parent().expect("in crosscut/about"))
                             .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
@@ -932,7 +930,7 @@ fn discover_concerns(
         .collect();
     let (mut accepted, mut declined, mut skipped) = (Vec::new(), 0, 0);
     for (i, card) in fresh.iter().enumerate() {
-        eprint!("{}", discover::render(card, i + 1, fresh.len(), width));
+        eprint!("{}", discover::render(card, i + 1, fresh.len()));
         match discover::ask(&mut input) {
             discover::Answer::Accept => {
                 let dir = discover::accept(&root, card, &today)?;
