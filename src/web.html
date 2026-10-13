@@ -179,19 +179,30 @@ async function poll(){
 }
 
 // Replay: step through recorded states, pausing at each question and after a long wait.
+let playing=false;
 function advance(){
+  if(playing)return;
+  playing=true;
   const from=REPLAY[replayAt];
   const fromWaits=from.items.filter(i=>i.k==='wait').length;
   (function tick(){
-    if(replayAt>=REPLAY.length-1)return;
+    if(replayAt>=REPLAY.length-1){playing=false;return;}
     replayAt++;state=REPLAY[replayAt];render();
     const waits=state.items.filter(i=>i.k==='wait').length;
-    if(state.ask&&state.ask.id!==(from.ask&&from.ask.id))return;
-    if(waits>fromWaits&&!advance.waited){advance.waited=true;return;}
+    if(state.ask&&state.ask.id!==(from.ask&&from.ask.id)){playing=false;return;}
+    if(waits>fromWaits&&!advance.waited){advance.waited=true;playing=false;return;}
     setTimeout(tick,state.items.length>from.items.length+40?20:90);
   })();
 }
-window.crosscutReplayNext=()=>{if(!state.ask)advance();};
+// In a replay, Enter or a click away from the question moves on, and the arrow keys belong
+// to whatever is showing the replay.
+if(REPLAY){
+  document.addEventListener('keydown',ev=>{
+    if(ev.key==='ArrowLeft'||ev.key==='ArrowRight'){parent.postMessage({crosscut:ev.key},'*');return;}
+    if((ev.key==='Enter'||ev.key===' ')&&!state.ask){ev.preventDefault();advance();}
+  });
+  document.addEventListener('click',ev=>{if(!state.ask&&!ev.target.closest('.ask'))advance();});
+}
 if(REPLAY){state=REPLAY[0];render();}else poll();
 </script>
 </body>
