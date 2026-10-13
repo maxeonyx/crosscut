@@ -868,6 +868,7 @@ fn unpack_concerns(
         None => {
             let harness = Harness::resolve(run.harness.clone())?;
             let timeout = Duration::from_secs(run.timeout);
+            eprintln!("{}", unpack::WHAT_HAPPENS);
             // Unpacking works from short descriptions, never from the code.
             let mut about = Vec::new();
             for project in &projects {
@@ -880,7 +881,7 @@ fn unpack_concerns(
                             &unpack::describe_prompt(project),
                             review_model.as_deref().or(run.model.as_deref()),
                             &project.dir,
-                            Some(project),
+                            std::slice::from_ref(project),
                             timeout,
                         )?;
                         let text = unpack::confirm_about(&mut input, &project.name, &draft);
@@ -898,20 +899,34 @@ fn unpack_concerns(
                 std::fs::read_to_string(root.join("crosscut/declined.md")).unwrap_or_default();
             let prompt = unpack::prompt(&prompt("unpack")?, &about, &known, &declined);
             eprintln!(
-                "\nUnpacking concerns for {}, from their descriptions alone. This takes a few minutes.",
+                "\nUnpacking concerns for {}, from their descriptions alone. This takes a few minutes: go and get a coffee.",
                 about.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(", ")
+            );
+            let reply = unpack::run(&harness, &prompt, run.model.as_deref(), &root, &[], timeout)?;
+            let mut landscape = unpack::parse(&reply).inspect_err(|_| {
+                let _ = unpack::write(&root.join("crosscut/landscape.reply.md"), &reply);
+            })?;
+            eprintln!(
+                "\nPutting {} concerns in order of leverage, with a quick look at the code.",
+                landscape.cards.len()
             );
             let reply = unpack::run(
                 &harness,
-                &prompt,
-                run.model.as_deref(),
+                &unpack::order_prompt(&landscape.cards, &about, &projects),
+                review_model.as_deref().or(run.model.as_deref()),
                 &root,
-                None,
-                timeout,
-            )?;
-            let landscape = unpack::parse(&reply).inspect_err(|_| {
-                let _ = unpack::write(&root.join("crosscut/landscape.reply.md"), &reply);
-            })?;
+                &projects,
+                timeout.min(Duration::from_secs(600)),
+            );
+            match reply.and_then(|reply| unpack::parse_order(&reply, &landscape.cards)) {
+                Ok(order) => {
+                    landscape.cards = order
+                        .into_iter()
+                        .map(|i| landscape.cards[i].clone())
+                        .collect()
+                }
+                Err(e) => eprintln!("  Kept the unpacked order: {e}"),
+            }
             let json = serde_json::to_string_pretty(&landscape).expect("serialisable");
             unpack::write(&landscape_path, &json)?;
             landscape
@@ -923,6 +938,19 @@ fn unpack_concerns(
         .iter()
         .filter(|card| !concerns.iter().any(|c| c.slug == card.slug))
         .collect();
+    eprintln!("\n{} concerns, highest leverage first:\n", fresh.len());
+    for (i, card) in fresh.iter().enumerate() {
+        eprintln!(
+            "  {:>2}. {}  ({})",
+            i + 1,
+            card.title,
+            card.projects.join(", ")
+        );
+    }
+    eprint!("\nEnter to go through them one at a time > ");
+    let _ = std::io::Write::flush(&mut std::io::stderr());
+    let mut line = String::new();
+    let _ = std::io::BufRead::read_line(&mut input, &mut line);
     let (mut accepted, mut declined, mut skipped) = (Vec::new(), 0, 0);
     for (i, card) in fresh.iter().enumerate() {
         eprint!("{}", unpack::render(card, i + 1, fresh.len()));

@@ -456,6 +456,63 @@ Definition versus execution: loading code should only define things. When it act
 - A test runner collecting tests imports every module, and one of them sends a real request to a partner API each time anyone runs the suite.
 - Registering definitions (route decorators, plugin registries) is the accepted exception: it records what exists without doing anything. Serverless platforms recommend building clients at module scope for warm reuse, and that fits too, as long as the connection opens on first use.
 
+### A record of progress should advance only after the work it records is durable
+
+Commit ordering, as in write-ahead logging and at-least-once processing. A watermark, a processed-ID list or a consumer offset is a claim that some work is done. If it is written before the work's effects are durable (uploaded, committed, flushed), a crash in between loses that work permanently, because the next run believes it already happened. If it is written after, a crash only causes a repeat, which is safe when the work is idempotent. So the progress record goes last, and the work has to be safe to repeat.
+
+- A pipeline records a notice as processed, then the upload of its attachment fails; the next run skips it, and the attachment never appears.
+- An incremental ETL job advances its high-water mark at the start of the run, the load fails halfway, and the rows in that window are never loaded.
+- A Kafka consumer commits its offset on receipt rather than after handling the message, and a crash drops the message.
+- A job writes its state file and its outputs to different stores, and only one of the two writes survives a timeout.
+- Where losing an item is acceptable, as with best-effort metrics, the ordering matters less.
+
+### Published output should become visible all at once, or be marked provisional or complete
+
+Atomic visibility, as in commit protocols. A consumer that reads while a producer is writing sees a state that never existed: half a file, a new index page that links to pages not yet uploaded, some extract files without their partners. The established patterns are to write to a temporary name and rename, to write the data first and a manifest or completion marker last, or to swap a pointer to a fully built version.
+
+- A downstream system picks up an extract file while it is still being written and loads half of it.
+- A static site uploads its new index page before the attachment it links to, and readers get a 404 for a few minutes, or forever if the upload then fails.
+- A consumer polls a directory for a CSV and its matching control file, and processes the CSV alone because the control file arrives second.
+- A dbt run rebuilds a table in place, and a report queries it mid-run.
+- A single small object written with one atomic PUT to an object store is already atomic.
+
+### A stream consumer should be able to detect gaps in what it received, and recover from them
+
+Sequenced delivery. Over a connection that can drop, a consumer cannot tell 'nothing happened' from 'I missed it' unless messages carry sequence numbers or the protocol supports resumption. Detecting a gap is the precondition for recovering from it, by replaying from a sequence or re-fetching a snapshot. Server-Sent Events has this built in (event IDs, and the Last-Event-ID header on reconnect), but only if the server assigns IDs and can honour them.
+
+- A browser's market ticker reconnects after a network blip and silently misses three price updates, showing a stale price until the next trade.
+- A service consuming an exchange feed loses a UDP packet, and its order book is wrong until restart, because nothing checked the sequence numbers.
+- A chat client reconnects and never shows the messages sent while it was offline.
+- A stream of 'current value' updates that each carry the full state needs only to resubscribe, not to replay.
+
+### A snapshot followed by a stream of updates should not lose the updates that happen in between
+
+This is the snapshot-and-delta consistency problem. If a consumer takes a snapshot and then subscribes, any update between the two is lost. If it subscribes and then takes a snapshot, updates already reflected in the snapshot may be applied twice. The standard fix is to subscribe first and buffer, take a snapshot that carries a version or sequence, and then apply only buffered updates newer than it. Change-data-capture initial loads and market-data recovery protocols both specify exactly this.
+
+- An SSE endpoint sends the current prices and then attaches the client to the live stream; a trade in the gap never reaches that client.
+- A warehouse does a full initial load from a source table and then starts consuming changes from the time the load finished, missing the rows changed during the load.
+- A cache warms itself from a database scan and then subscribes to invalidations, keeping stale values for keys updated mid-scan.
+- If updates carry full state and arrive frequently, a missed one self-heals at the next update, which may be acceptable.
+
+### A fan-out to many subscribers should bound what it buffers for each one
+
+Backpressure. When one producer broadcasts to many consumers, a consumer slower than the stream has a growing queue. If that queue is unbounded, one slow or stalled client grows memory until the process dies and takes every other client with it. The choices are to block (which stalls everyone), to drop or conflate (send only the latest value per key), or to disconnect the slow subscriber. Each of these is a decision, and an unbounded queue is the absence of one.
+
+- A market-data server keeps an unbounded asyncio queue per SSE client. A client on a mobile connection stalls, its queue grows for an hour, and the task runs out of memory, dropping every subscriber.
+- A chat server's websocket send buffers grow without limit for a client behind a stuck proxy.
+- A log shipper buffers unboundedly while its destination is down, and fills the disk.
+- Conflation works when only the latest value matters, like a price. It does not work for a stream of distinct trades, where dropping loses information, and a disconnect is more honest.
+
+### A fallback should not share a cause of failure with the thing it backs up
+
+Common-mode failure and failure-domain independence. Redundancy only helps against failures the replicas do not share. A backup path that depends on the same DNS, the same CDN configuration, the same upstream platform, the same account or the same deploy pipeline as the primary fails together with it in exactly the incidents it exists for. Listing the shared dependencies is cheap. Removing them may not be, and accepting one is a legitimate choice once it is visible.
+
+- A status page is hosted on the same cloud region as the service it reports on, and it goes down with it.
+- A backup notices site is fed from the same publishing platform as the main site, so if that platform is the cause of the outage, the backup stops updating at the moment it is needed.
+- Two redundant links run through the same street cabinet.
+- A disaster-recovery database replicates from the primary and faithfully replicates a destructive bug.
+- If the fallback only ever needs to serve content already published, freezing during an upstream outage may be fine, provided it says when it was last updated.
+
 ## More rules, titles only
 
 These were rated just as highly. Their stories are left for you to work out, which is the exercise.

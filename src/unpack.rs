@@ -17,6 +17,8 @@ use crate::model::{self, Project};
 
 const CARDS_OPEN: &str = "<crosscut-cards>";
 const CARDS_CLOSE: &str = "</crosscut-cards>";
+const ORDER_OPEN: &str = "<crosscut-order>";
+const ORDER_CLOSE: &str = "</crosscut-order>";
 
 /// What one unpacking run proposes. It is written to `crosscut/landscape.json`, so the cards
 /// can be floated again without another run.
@@ -99,6 +101,90 @@ pub fn prompt(
     )
 }
 
+/// What `crosscut unpack` is about to do, shown before it starts. One line per step, for the
+/// terminal to wrap.
+pub const WHAT_HAPPENS: &str = "\
+Here is what happens next:
+  1. Describe. A quick look at each repository's README and build files says, in a few sentences, what kind of software it is. You can correct each description.
+  2. Unpack. Claude lays out the cross-cutting concerns that software of this kind meets, from the descriptions alone. It never sees your code, so every concern is a general rule, not a bug report. This takes a few minutes.
+  3. Prioritise. A quick look at the code puts the concerns in order of leverage across your repositories. It can only reorder them.
+  4. Choose. You see them all, then one at a time. Accept the ones worth keeping visible. Decline the rest, with a reason if you like, and they will not come back.
+  5. Review. Each accepted concern becomes a concern directory, and an agent reviews your code for it. You get a map and a report.
+";
+
+/// The prompt that puts unpacked cards in order of leverage. Its answer is only an order: no
+/// text it writes reaches the person.
+pub fn order_prompt(cards: &[Card], about: &[(String, String)], projects: &[Project]) -> String {
+    let projects: String = projects
+        .iter()
+        .map(|p| {
+            let text = about
+                .iter()
+                .find(|(n, _)| *n == p.name)
+                .map_or("", |(_, t)| t.as_str());
+            format!("- `{}` at `{}`: {}\n", p.name, p.dir.display(), text.trim())
+        })
+        .collect();
+    let cards: String = cards
+        .iter()
+        .map(|c| {
+            format!(
+                "- `{}`: {} (applies to {}). {}\n",
+                c.slug,
+                c.title,
+                c.projects.join(", "),
+                c.here
+            )
+        })
+        .collect();
+    format!(
+        "Put these concerns in order of leverage across these projects, highest first.\n\n\
+         Leverage is the value of acting on a concern against the effort of acting on it, \
+         summed across the projects. A cheap change that pays in several projects comes \
+         first. An important concern that is expensive to act on does not lead. This is \
+         leverage, not importance.\n\n\
+         Take a quick look at the code to judge effort and reach: a few searches and a few \
+         files, not a review. Spend at most a few minutes. Do not modify anything.\n\n\
+         ## The projects\n\n{projects}\n## The concerns\n\n{cards}\n\
+         ## Your answer\n\n\
+         End your reply with every slug above, each exactly once, one per line, between \
+         `{ORDER_OPEN}` and `{ORDER_CLOSE}`. Nothing else you write is shown to anyone.\n"
+    )
+}
+
+/// The order in an agent's reply, as indices into `cards`. Anything but a reordering of
+/// exactly these cards is refused.
+pub fn parse_order(reply: &str, cards: &[Card]) -> Result<Vec<usize>, String> {
+    let start = reply
+        .rfind(ORDER_OPEN)
+        .ok_or("the agent's reply had no <crosscut-order> answer")?;
+    let rest = &reply[start + ORDER_OPEN.len()..];
+    let body = &rest[..rest.find(ORDER_CLOSE).unwrap_or(rest.len())];
+    let mut order = Vec::new();
+    for slug in body
+        .lines()
+        .map(|l| l.trim().trim_matches(['`', '-', ' ']))
+        .filter(|l| !l.is_empty())
+    {
+        let i = cards
+            .iter()
+            .position(|c| c.slug == slug)
+            .ok_or_else(|| format!("the order names `{slug}`, which is not a card"))?;
+        if order.contains(&i) {
+            return Err(format!("the order names `{slug}` twice"));
+        }
+        order.push(i);
+    }
+    if order.len() != cards.len() {
+        return Err(format!(
+            "the order has {} of the {} cards",
+            order.len(),
+            cards.len()
+        ));
+    }
+    Ok(order)
+}
+
 /// The prompt that describes one project, for unpacking to work from.
 pub fn describe_prompt(project: &Project) -> String {
     format!(
@@ -130,13 +216,13 @@ pub fn parse(reply: &str) -> Result<Landscape, String> {
 }
 
 /// Runs the agent in `dir`, showing what it looks at as it goes, and returns its final reply.
-/// Without `access`, a Claude agent gets no tools at all.
+/// It may read the projects in `access`; with none, a Claude agent gets no tools at all.
 pub fn run(
     harness: &Harness,
     prompt: &str,
     model: Option<&str>,
     dir: &Path,
-    access: Option<&Project>,
+    access: &[Project],
     timeout: Duration,
 ) -> Result<String, String> {
     let (mut cmd, stdin) = harness.command(prompt, model)?;
@@ -144,12 +230,13 @@ pub fn run(
     let claude = matches!(harness, Harness::Claude);
     if claude {
         cmd.args(["--output-format", "stream-json", "--verbose"]);
-        if access.is_none() {
+        if access.is_empty() {
             cmd.args(["--tools", ""]);
+        } else {
+            cmd.arg("--add-dir").args(access.iter().map(|p| &p.dir));
         }
     }
-    let projects: Vec<Project> = access.into_iter().cloned().collect();
-    let projects = &projects[..];
+    let projects = access;
     let started = Instant::now();
     let mut steps = 0;
     let mut result: Option<Result<String, String>> = None;
@@ -362,4 +449,42 @@ pub fn confirm_about(input: &mut impl BufRead, project: &str, text: &str) -> Str
 
 pub fn write(path: &Path, text: &str) -> Result<(), String> {
     std::fs::write(path, text).map_err(|e| format!("cannot write {}: {e}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cards(slugs: &[&str]) -> Vec<Card> {
+        slugs
+            .iter()
+            .map(|slug| Card {
+                slug: slug.to_string(),
+                title: String::new(),
+                justification: String::new(),
+                stories: vec![],
+                projects: vec![],
+                here: String::new(),
+                how_to_review: String::new(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_order_must_be_exactly_a_reordering_of_the_cards() {
+        let cards = cards(&["a", "b", "c"]);
+        let order = |body: &str| {
+            parse_order(
+                &format!("prose\n{ORDER_OPEN}\n{body}\n{ORDER_CLOSE}"),
+                &cards,
+            )
+        };
+        assert_eq!(order("c\n- `a`\nb"), Ok(vec![2, 0, 1]));
+        assert!(order("c\na").unwrap_err().contains("2 of the 3"));
+        assert!(order("c\na\nb\na").unwrap_err().contains("twice"));
+        assert!(order("c\na\nb\nd: a new concern")
+            .unwrap_err()
+            .contains("not a card"));
+        assert!(parse_order("no tags", &cards).is_err());
+    }
 }

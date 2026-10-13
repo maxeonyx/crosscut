@@ -17,6 +17,7 @@ A card is a concern in its finished form, as in [../catalogue.md](../catalogue.m
 
 For each project, take its kind, its people and its moments, and ask what that kind of software meets:
 - **The kind:** a streaming API, a data warehouse's ETL jobs, a static site generator, a CLI. Each kind has its own landscape: what goes wrong with long-lived connections, with scheduled loads, with derived files, with output read by scripts.
+- **The tools:** the language, runtime, build system, platform and libraries the description names. Each carries well-known concerns of its own, and these are often the cheapest wins: a Python module should generally have no side effects when it is imported; a container's entrypoint should pass stop signals on to the program; a Make target should not depend on files it does not declare. Include the ones that fit. Rote is fine when it pays.
 - **The people and moments** in [../reservoirs.md](../reservoirs.md): the operator at 3am, the fresh agent, the deploy, the restore, the second instance.
 - **Across the projects:** what several of them share, such as schedules, caches, published files or retries, and what one kind teaches about another.
 - **The seed cards** in [../catalogue.md](../catalogue.md). They show the level every card must sit at. A seed that software like this meets is a good card: use its rule as written. A seed this kind of software does not meet stays out.

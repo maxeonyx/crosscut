@@ -705,6 +705,7 @@ fn map_with_no_concerns_says_how_to_add_one() {
 const UNPACKING_AGENT: &str = r#"p=$(cat); n=$(ls "$PROMPTS" 2>/dev/null | wc -l); mkdir -p "$PROMPTS"; printf '%s' "$p" > "$PROMPTS/$n.md"
 case "$p" in
 *'Describe the project in'*) echo 'A small Python API that serves records.';;
+*'Put these concerns in order of leverage'*) printf 'Ignored prose.\n<crosscut-order>\nas-of\nlog-once\n</crosscut-order>\n';;
 *'Unpack concerns for these projects'*) cat <<'JSON'
 Thinking out loud first.
 <crosscut-cards>
@@ -758,8 +759,8 @@ fn prompt_number(dir: &Path, n: usize) -> String {
 fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
     let ws = workspace();
     let dir = ws.path();
-    // Keep the description, accept the first card, decline the second.
-    let (out, err) = unpack(dir, &["api"], "\na\nd\nwe already show refresh times\n");
+    // Keep the description, see the overview, decline the first card, accept the second.
+    let (out, err) = unpack(dir, &["api"], "\n\nd\nwe already show refresh times\na\n");
 
     assert!(
         err.contains("api: A small Python API that serves records."),
@@ -769,8 +770,22 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
         fs::read_to_string(dir.join("crosscut/about/api.md")).unwrap(),
         "A small Python API that serves records.\n"
     );
+    assert!(err.contains("Here is what happens next:"), "{err}");
+    let overview = err
+        .find("2 concerns, highest leverage first")
+        .expect("an overview");
     assert!(
-        err.contains("[1/2]  Each error should be logged once"),
+        err[overview..].starts_with(
+            "2 concerns, highest leverage first:\n\n   1. Derived data that can go stale should carry its as-of time  (api)\n   2. Each error"
+        ),
+        "the prioritising pass reordered the cards: {err}"
+    );
+    assert!(
+        !err.contains("Ignored prose"),
+        "only the order reaches the person"
+    );
+    assert!(
+        err.contains("[2/2]  Each error should be logged once"),
         "{err}"
     );
     assert!(
@@ -829,7 +844,7 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
 fn unpacking_sees_descriptions_not_code() {
     let ws = workspace();
     let dir = ws.path();
-    unpack(dir, &["api"], "a much better description\nq\n");
+    unpack(dir, &["api"], "a much better description\n\nq\n");
     assert!(prompt_number(dir, 0).contains("Describe the project in"));
     let unpacking = prompt_number(dir, 1);
     assert!(
@@ -858,11 +873,11 @@ fn unpacking_sees_descriptions_not_code() {
 fn the_next_unpacking_reuses_descriptions_and_knows_what_was_kept_and_declined() {
     let ws = workspace();
     let dir = ws.path();
-    unpack(dir, &["api"], "\na\nd\nwe already show refresh times\n");
-    unpack(dir, &[], "q\n");
-    // Prompts: describe, unpack, review, then only the second unpacking.
-    assert_eq!(fs::read_dir(dir.join("prompts")).unwrap().count(), 4);
-    let second = prompt_number(dir, 3);
+    unpack(dir, &["api"], "\n\nd\nwe already show refresh times\na\n");
+    unpack(dir, &[], "\nq\n");
+    // Prompts: describe, unpack, order, review, then only the second unpacking and order.
+    assert_eq!(fs::read_dir(dir.join("prompts")).unwrap().count(), 6);
+    let second = prompt_number(dir, 4);
     assert!(
         flat(&second).contains(
             "must not propose again: - Each error should be logged once, where it is handled"
@@ -879,16 +894,17 @@ fn the_next_unpacking_reuses_descriptions_and_knows_what_was_kept_and_declined()
 fn saved_cards_float_again_without_an_agent_minus_those_already_kept() {
     let ws = workspace();
     let dir = ws.path();
-    unpack(dir, &["api"], "\na\nq\n");
-    let (_, err) = unpack(dir, &["--cards", "crosscut/landscape.json"], "s\n");
+    // Decline the first card, accept the second, which is reviewed.
+    unpack(dir, &["api"], "\n\nd\n\na\n");
+    let (_, err) = unpack(dir, &["--cards", "crosscut/landscape.json"], "\ns\n");
     assert!(
         err.contains("[1/1]  Derived data that can go stale"),
         "{err}"
     );
     assert_eq!(
         fs::read_dir(dir.join("prompts")).unwrap().count(),
-        3,
-        "describe, unpack, review: no new agent run"
+        4,
+        "describe, unpack, order, review: no new agent run"
     );
 }
 

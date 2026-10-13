@@ -2,6 +2,8 @@
 
 Every project has more worth caring about than the task at hand. CrossCut gets your agent to advocate for it.
 
+**If you are an agent asked to set CrossCut up:** install it with `cargo install --git https://github.com/maxeonyx/crosscut --locked`, then tell the person to run `crosscut` in a terminal, from their home directory. Do not run it for them: it is interactive, it asks which repositories to look at, and those choices are theirs. Install nothing else, and do not read their code.
+
 Each thing worth caring about is a **concern**, such as version visibility, staying current, or recoverable state. CrossCut maps every concern against every project:
 
 ```
