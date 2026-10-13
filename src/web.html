@@ -77,7 +77,27 @@ a{color:var(--accent)}
 const REPLAY=window.CROSSCUT_REPLAY||null;
 const $=s=>document.querySelector(s);
 const esc=t=>String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let state={items:[],ask:null,done:null},shownAsk=null,replayAt=0,waitStarted=null;
+let state={items:[],ask:null,done:null},shownAsk=null,replayAt=0;
+
+// Lines are revealed one at a time, each held long enough to read, and a question waits until
+// everything before it has been shown. `target` is the latest state; `state` is what is shown.
+const DWELL={plan:2500,note:1200,wait:1200,summary:1200,step:900,item:500,answered:300,progress:60};
+let target=state,shown=0,pacing=false,answered=null;
+function show(){
+  const all=shown>=target.items.length;
+  state={items:target.items.slice(0,shown),
+    ask:all&&target.ask&&target.ask.id!==answered?target.ask:null,
+    done:all?target.done:null};
+  render();
+}
+function pace(){
+  if(pacing)return;
+  if(shown>=target.items.length){show();return;}
+  pacing=true;shown++;show();
+  setTimeout(()=>{pacing=false;pace();},DWELL[target.items[shown-1].k]??300);
+}
+function receive(s){target=s;pace();}
+const revealing=()=>shown<target.items.length;
 
 function renderLog(items){
   const blocks=[];let cur=null;
@@ -142,7 +162,7 @@ function render(){
 }
 
 async function answer(value){
-  const id=state.ask.id;shownAsk=null;$('#ask').innerHTML='';
+  const id=state.ask.id;answered=id;shownAsk=null;$('#ask').innerHTML='';
   if(REPLAY){advance();return;}
   await fetch('/answer',{method:'POST',body:JSON.stringify({id,value})});
   poll();
@@ -174,25 +194,27 @@ document.addEventListener('keydown',ev=>{
 
 async function poll(){
   if(REPLAY)return;
-  try{state=await (await fetch('/state')).json();render();}catch(e){}
-  if(!(state.done&&!state.ask))setTimeout(poll,state.ask?1500:400);
+  try{
+    const s=await (await fetch('/state')).json();
+    // On opening, what already happened is shown at once.
+    if(!poll.started){poll.started=true;shown=s.items.length;}
+    receive(s);
+  }catch(e){}
+  if(!(target.done&&!target.ask))setTimeout(poll,target.ask&&target.ask.id!==answered?1500:400);
 }
 
-// Replay: step through recorded states, pausing at each question and after a long wait.
-let playing=false;
+// Replay: jump to the next recorded question, or to the start of the long wait, and let the
+// reveal play everything up to it.
 function advance(){
-  if(playing)return;
-  playing=true;
+  if(revealing())return;
   const from=REPLAY[replayAt];
-  const fromWaits=from.items.filter(i=>i.k==='wait').length;
-  (function tick(){
-    if(replayAt>=REPLAY.length-1){playing=false;return;}
-    replayAt++;state=REPLAY[replayAt];render();
-    const waits=state.items.filter(i=>i.k==='wait').length;
-    if(state.ask&&state.ask.id!==(from.ask&&from.ask.id)){playing=false;return;}
-    if(waits>fromWaits&&!advance.waited){advance.waited=true;playing=false;return;}
-    setTimeout(tick,state.items.length>from.items.length+40?20:90);
-  })();
+  const waits=s=>s.items.filter(i=>i.k==='wait').length;
+  while(replayAt<REPLAY.length-1){
+    replayAt++;const s=REPLAY[replayAt];
+    if(s.ask&&s.ask.id!==(from.ask&&from.ask.id))break;
+    if(waits(s)>waits(from)&&!advance.waited){advance.waited=true;break;}
+  }
+  receive(REPLAY[replayAt]);
 }
 // In a replay, Enter or a click away from the question moves on, and the arrow keys belong
 // to whatever is showing the replay.
@@ -202,8 +224,8 @@ if(REPLAY){
     if((ev.key==='Enter'||ev.key===' ')&&!state.ask){ev.preventDefault();advance();}
   });
   document.addEventListener('click',ev=>{if(!state.ask&&!ev.target.closest('.ask'))advance();});
-}
-if(REPLAY){state=REPLAY[0];render();}else poll();
+  receive(REPLAY[0]);
+}else poll();
 </script>
 </body>
 </html>

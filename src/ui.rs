@@ -2,8 +2,9 @@
 //! concerns. The flow is written once against `Ui`; a terminal and a browser page each
 //! implement it.
 
-use std::io::{BufRead, Write};
+use std::io::{BufRead, IsTerminal, Write};
 use std::path::Path;
+use std::time::Duration;
 
 use crate::style;
 use crate::unpack::{Answer, Card};
@@ -115,8 +116,22 @@ pub fn plan_steps(agent: &str) -> [(&'static str, String, &'static str); 5] {
     ]
 }
 
+/// How long a person needs to read a line before the next one arrives. The page keeps the
+/// same pace.
+fn dwell(say: &Say) -> Duration {
+    Duration::from_millis(match say {
+        Say::Plan(_) => 2500,
+        Say::Note(_) | Say::Wait(_) | Say::Summary { .. } => 1200,
+        Say::Step(..) => 900,
+        Say::Item(..) => 500,
+        Say::Answered(..) => 300,
+        Say::Title | Say::Progress(_) => 0,
+    })
+}
+
 impl Ui for Terminal {
     fn say(&self, say: Say) {
+        let pause = dwell(&say);
         match say {
             Say::Title => eprintln!(
                 "{}  {}\n",
@@ -155,6 +170,9 @@ impl Ui for Terminal {
                 style::bold(&format!("{accepted} accepted")),
                 style::dim(&format!("{declined} declined, {skipped} skipped, of {of}"))
             ),
+        }
+        if std::io::stderr().is_terminal() {
+            std::thread::sleep(pause);
         }
     }
 
