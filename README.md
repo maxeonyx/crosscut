@@ -17,10 +17,12 @@ version-visibility  missing   yes         deferred      yes
 
 ```bash
 cargo install --git https://github.com/maxeonyx/crosscut --locked
+crosscut discover ~/src/*      # an agent proposes concerns; accept or decline each, and the accepted ones are reviewed
 crosscut install-skill        # teach Claude Code, Codex and OpenCode how to use it
 crosscut check                # run the machine checks; --agentic adds the prompt checks
 crosscut map                  # the grid
 crosscut test                 # check the checks against their fixtures
+crosscut report               # the map and what the reviews found, as one page
 ```
 
 Then tell your agent: *"Use CrossCut here."*

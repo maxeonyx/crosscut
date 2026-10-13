@@ -538,10 +538,12 @@ If `crosscut` is on `PATH`:
 
 | Command | What it does |
 |---|---|
+| `crosscut discover [dir...]` | An agent proposes concerns as cards; the person accepts or declines each. Accepted ones become concerns with a prompt check, and are reviewed in every project. Declined ones are not proposed again. |
 | `crosscut check [slug...]` | Runs machine checks (tiers 1 and 2) per project, and records observations. `--agentic` adds prompt checks, which cost model calls. |
 | `crosscut map [--project p]` | Shows every concern against every project, combining decisions and observations. |
 | `crosscut test [slug...]` | Runs each mechanism against its fixtures. `--agentic` includes prompt checks. |
 | `crosscut prompt <mode>` | Prints the full prompt for a mode, for harnesses without skills. |
+| `crosscut report` | Writes `crosscut/report.html`: the map, with each concern and what its reviews found. |
 | `crosscut install-skill` | Installs this skill for Claude Code, Codex and OpenCode. |
 
 Nothing here requires the CLI. Everything it does, you can do with the files.

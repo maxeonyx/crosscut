@@ -24,7 +24,7 @@ crosscut/
 ```
 
 `projects` lists one path or glob per line, relative to the directory that
-holds `crosscut/`, for example `tools/*`. Lines starting with `#` are
+holds `crosscut/` unless absolute, for example `tools/*`. Lines starting with `#` are
 comments. A project's name is its directory name. In a wrapper over many
 repositories, the projects are its checkouts or submodules, and they never
 need to know CrossCut exists.
