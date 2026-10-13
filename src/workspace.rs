@@ -1,12 +1,11 @@
 //! Making a workspace: finding the repositories already on this machine, and cloning the
 //! chosen ones side by side, so CrossCut never works in anyone's own checkouts.
 
-use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 
-use crate::style;
+use crate::ui::{Say, Ui};
 
 /// One repository, with every local clone of it that was found.
 #[derive(Debug, PartialEq)]
@@ -126,42 +125,31 @@ pub fn short_name(url: &str) -> String {
     parts[parts.len().saturating_sub(2)..].join("/")
 }
 
-/// Asks which repositories to pull in: numbers from `repos`, or `owner/name` for others.
-pub fn choose(input: &mut impl BufRead, repos: &[Repo]) -> Vec<(String, String)> {
-    loop {
-        eprint!(
-            "\n{} {} > ",
-            style::bold("Pull in which?"),
-            style::dim(if repos.is_empty() {
-                "owner/name"
-            } else {
-                "numbers (1 is the most recent), or owner/name"
-            })
-        );
-        let _ = std::io::stderr().flush();
-        let mut line = String::new();
-        if input.read_line(&mut line).unwrap_or(0) == 0 {
-            return Vec::new();
-        }
-        let picked: Option<Vec<(String, String)>> = line
-            .split(|c: char| c.is_whitespace() || c == ',')
-            .filter(|w| !w.is_empty())
-            .map(|w| match w.parse::<usize>() {
-                Ok(n) => repos
-                    .get(n.checked_sub(1)?)
-                    .map(|r| (r.name.clone(), r.source.clone())),
-                Err(_) if w.split('/').count() == 2 => Some((w.to_string(), github(w))),
-                Err(_) => None,
-            })
-            .collect();
-        match picked {
-            Some(picked) if !picked.is_empty() => return picked,
-            _ => eprintln!(
-                "  Numbers from 1 to {}, or owner/name, please.",
-                repos.len()
-            ),
+impl Repo {
+    /// Where it is: its one clone, or how many there are.
+    pub fn where_(&self) -> String {
+        match self.clones.len() {
+            1 => crate::tilde(&self.clones[0]),
+            n => format!("{n} clones"),
         }
     }
+}
+
+/// Repositories picked by number from `repos`, or named as owner/name, as `(name, source)`.
+/// None if anything in the line is neither.
+pub fn parse_choice(line: &str, repos: &[Repo]) -> Option<Vec<(String, String)>> {
+    let picked: Option<Vec<(String, String)>> = line
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|w| !w.is_empty())
+        .map(|w| match w.parse::<usize>() {
+            Ok(n) => repos
+                .get(n.checked_sub(1)?)
+                .map(|r| (r.name.clone(), r.source.clone())),
+            Err(_) if w.split('/').count() == 2 => Some((w.to_string(), github(w))),
+            Err(_) => None,
+        })
+        .collect();
+    picked.filter(|p| !p.is_empty())
 }
 
 fn github(name: &str) -> String {
@@ -170,16 +158,20 @@ fn github(name: &str) -> String {
 
 /// Clones each repository into `workspace/<name>`, reusing a clone already there. Returns
 /// the project directories.
-pub fn pull_in(workspace: &Path, repos: &[(String, String)]) -> Result<Vec<PathBuf>, String> {
+pub fn pull_in(
+    ui: &dyn Ui,
+    workspace: &Path,
+    repos: &[(String, String)],
+) -> Result<Vec<PathBuf>, String> {
     std::fs::create_dir_all(workspace)
         .map_err(|e| format!("cannot create {}: {e}", workspace.display()))?;
     let mut dirs = Vec::new();
     for (name, source) in repos {
         let dir = workspace.join(name.rsplit('/').next().unwrap_or(name));
         if dir.join(".git").is_dir() {
-            eprintln!("  {}  {}", name, style::dim("already here"));
+            ui.say(Say::Item(name, "already here"));
         } else {
-            eprintln!("  {}  {}", name, style::dim(source));
+            ui.say(Say::Item(name, source));
             let mut git = Command::new("git");
             git.args(["clone", "--quiet"]);
             // Hosted repositories fetch file contents lazily; local ones are hard-linked.
@@ -279,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn choosing_takes_numbers_and_owner_names_and_asks_again_on_nonsense() {
+    fn choices_are_numbers_and_owner_names_and_nothing_else() {
         let repos = [Repo {
             name: "NZX/DataCentral".into(),
             source: "git@github.com:NZX/DataCentral.git".into(),
@@ -287,8 +279,8 @@ mod tests {
             touched: SystemTime::UNIX_EPOCH,
         }];
         assert_eq!(
-            choose(&mut "9\nx\n1 maxeonyx/trunc\n".as_bytes(), &repos),
-            [
+            parse_choice("1 maxeonyx/trunc\n", &repos),
+            Some(vec![
                 (
                     "NZX/DataCentral".into(),
                     "git@github.com:NZX/DataCentral.git".into()
@@ -297,7 +289,10 @@ mod tests {
                     "maxeonyx/trunc".into(),
                     "git@github.com:maxeonyx/trunc.git".into()
                 ),
-            ]
+            ])
         );
+        assert_eq!(parse_choice("9", &repos), None);
+        assert_eq!(parse_choice("x", &repos), None);
+        assert_eq!(parse_choice("\n", &repos), None);
     }
 }

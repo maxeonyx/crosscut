@@ -8,6 +8,7 @@ mod harness;
 mod model;
 mod report;
 mod style;
+mod ui;
 mod unpack;
 mod workspace;
 
@@ -22,6 +23,7 @@ use clap::{Parser, Subcommand};
 
 use harness::Harness;
 use model::{Concern, Mechanism, Observation, Project};
+use ui::Say;
 
 /// Every file of the skill, by its path relative to the skill directory.
 const SKILL_FILES: &[(&str, &str)] = &[
@@ -227,7 +229,9 @@ struct RunArgs {
 fn main() -> ExitCode {
     let result = match Cli::parse().command {
         // A person at a terminal is set up interactively; an agent gets instructions.
-        None if std::io::stdin().is_terminal() && std::io::stderr().is_terminal() => welcome(),
+        None if std::io::stdin().is_terminal() && std::io::stderr().is_terminal() => {
+            welcome(&ui::Terminal)
+        }
         None => {
             print!("{}", orientation());
             Ok(ExitCode::SUCCESS)
@@ -243,7 +247,7 @@ fn main() -> ExitCode {
             cards,
             review_model,
             run,
-        }) => unpack_concerns(dirs, cards, review_model, run),
+        }) => unpack_concerns(&ui::Terminal, dirs, cards, review_model, run),
         Some(Cmd::Report { root }) => model::find_root(root).and_then(|root| {
             let path = report::write(&root)?;
             println!("{}", path.display());
@@ -713,10 +717,9 @@ fn check(
 // Unpacking
 
 /// Bare `crosscut` for a person. In a workspace, show its map and offer to unpack more.
-/// Anywhere else, say what CrossCut needs, recommend making a workspace of fresh clones, and
-/// say what to do instead.
-fn welcome() -> Result<ExitCode, String> {
-    let mut input = std::io::stdin().lock();
+/// Anywhere else, ask before searching for repositories, clone the chosen ones into a
+/// workspace, and unpack there.
+fn welcome(ui: &dyn ui::Ui) -> Result<ExitCode, String> {
     let run = RunArgs {
         projects: Vec::new(),
         jobs: 6,
@@ -725,95 +728,53 @@ fn welcome() -> Result<ExitCode, String> {
         timeout: 1800,
         root: None,
     };
+    ui.say(Say::Title);
     if let Ok(root) = model::find_root(None) {
-        map(None, Some(root.clone()))?;
-        if !unpack::confirm(&mut input, "\nLook for more cross-cutting concerns?") {
+        ui.finished(&root)?;
+        if !ui.yes_no("Look for more cross-cutting concerns?") {
             return Ok(ExitCode::SUCCESS);
         }
-        drop(input); // unpacking reads stdin too
-        return unpack_concerns(Vec::new(), None, None, run);
+        return unpack_concerns(ui, Vec::new(), None, None, run);
     }
 
     let here =
         std::env::current_dir().map_err(|e| format!("cannot read current directory: {e}"))?;
-    eprintln!(
-        "{}  {}\n",
-        style::bold("CrossCut"),
-        style::dim("cross-cutting concerns, kept visible across your repositories")
-    );
     let suggested = here.join("crosscut-workspace");
     if suggested.join("crosscut").is_dir() {
-        eprintln!(
-            "{}\n",
-            style::dim(&format!(
-                "You already have a workspace. To carry on in it: cd {} && crosscut",
-                tilde(&suggested)
-            ))
-        );
+        ui.say(Say::Note(&format!(
+            "You already have a workspace. To carry on in it: cd {} && crosscut",
+            tilde(&suggested)
+        )));
     }
-    let harness = Harness::resolve(None);
-    // Ask before looking. The list may then scroll off the top; number 1, the most recently
-    // used repository, sits nearest the prompt.
+    Harness::resolve(None)?;
     let search = format!(
         "Search for git repos under {}/ ?",
         tilde(&here).trim_end_matches('/')
     );
-    let repos = if unpack::confirm(&mut input, &search) {
+    let repos = if ui.yes_no(&search) {
         workspace::find(&here, 3)
     } else {
         Vec::new()
     };
-    if !repos.is_empty() {
-        eprintln!();
-    }
-    for (i, repo) in repos.iter().enumerate().rev() {
-        let clones = match repo.clones.len() {
-            1 => tilde(&repo.clones[0]),
-            n => format!("{n} clones"),
-        };
-        eprintln!(
-            "  {}  {}  {}",
-            style::dim(&format!("{:>3}", i + 1)),
-            repo.name,
-            style::dim(&clones)
-        );
-    }
-    if let Err(e) = &harness {
-        eprintln!("\n{e}");
-    }
-    harness?;
-    let chosen = workspace::choose(&mut input, &repos);
+    let chosen = ui.choose(&repos);
     if chosen.is_empty() {
         return Ok(ExitCode::SUCCESS);
     }
-    eprint!(
-        "\n{} {}\n{} {} > ",
-        style::dim("Fresh clones go in a workspace."),
-        style::dim("Your own checkouts are never touched."),
-        style::bold("Workspace"),
-        style::dim(&format!("[{}]", tilde(&suggested)))
-    );
-    let _ = std::io::Write::flush(&mut std::io::stderr());
-    let mut line = String::new();
-    let _ = std::io::BufRead::read_line(&mut input, &mut line);
-    drop(input); // unpacking reads stdin too
-    let workspace = match line.trim() {
+    let workspace = match ui.workspace(&tilde(&suggested)).as_str() {
         "" => suggested,
         path => match path.strip_prefix("~/") {
             Some(rest) => home().join(rest),
             None => here.join(path),
         },
     };
-    eprintln!("\n{}", style::bold("Cloning"));
-    let dirs = workspace::pull_in(&workspace, &chosen)?;
-    eprintln!(
-        "\n{}\n",
-        style::dim(&format!(
-            "Workspace: {}. Run `crosscut` there to come back to it.",
-            tilde(&workspace)
-        ))
-    );
+    ui.say(Say::Step("Cloning", ""));
+    let dirs = workspace::pull_in(ui, &workspace, &chosen)?;
+    ui.say(Say::Note(&format!(
+        "Workspace: {}. Run `crosscut` there to come back to it.",
+        tilde(&workspace)
+    )));
     unpack_concerns(
+        ui,
         dirs,
         None,
         None,
@@ -839,6 +800,7 @@ fn tilde(path: &Path) -> String {
 }
 
 fn unpack_concerns(
+    ui: &dyn ui::Ui,
     dirs: Vec<PathBuf>,
     cards: Option<PathBuf>,
     review_model: Option<String>,
@@ -868,7 +830,6 @@ fn unpack_concerns(
     }
     let today = jiff::Zoned::now().date().to_string();
     let concerns = model::concerns(&root)?;
-    let mut input = std::io::stdin().lock();
 
     let landscape_path = root.join("crosscut/landscape.json");
     let landscape = match cards {
@@ -881,15 +842,16 @@ fn unpack_concerns(
         None => {
             let harness = Harness::resolve(run.harness.clone())?;
             let timeout = Duration::from_secs(run.timeout);
-            eprintln!("{}", unpack::what_happens(harness.name()));
+            ui.say(Say::Plan(harness.name()));
             // Unpacking works from short descriptions, never from the code.
             let mut about = Vec::new();
             for project in &projects {
                 let text = match unpack::about(&root, &project.name) {
                     Some(text) => text,
                     None => {
-                        eprintln!("\n{} {}", style::bold("Describing"), project.name);
+                        ui.say(Say::Step("Describing", &project.name));
                         let draft = unpack::run(
+                            ui,
                             &harness,
                             &unpack::describe_prompt(project),
                             review_model.as_deref().or(run.model.as_deref()),
@@ -897,7 +859,7 @@ fn unpack_concerns(
                             std::slice::from_ref(project),
                             timeout,
                         )?;
-                        let text = unpack::confirm_about(&mut input, &project.name, &draft);
+                        let text = ui.about(&project.name, &draft);
                         let path = unpack::about_path(&root, &project.name);
                         std::fs::create_dir_all(path.parent().expect("in crosscut/about"))
                             .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
@@ -911,26 +873,36 @@ fn unpack_concerns(
             let declined =
                 std::fs::read_to_string(root.join("crosscut/declined.md")).unwrap_or_default();
             let prompt = unpack::prompt(&prompt("unpack")?, &about, &known, &declined);
-            eprintln!(
-                "\n{} cross-cutting concerns for {}, from their descriptions alone. {}",
-                style::bold("Unpacking"),
-                about
-                    .iter()
-                    .map(|(n, _)| n.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" and "),
-                style::italic("This takes a few minutes: go and get a coffee.")
-            );
-            let reply = unpack::run(&harness, &prompt, run.model.as_deref(), &root, &[], timeout)?;
+            let names: Vec<&str> = about.iter().map(|(n, _)| n.as_str()).collect();
+            ui.say(Say::Step(
+                "Unpacking",
+                &format!(
+                    "cross-cutting concerns for {}, from their descriptions alone.",
+                    names.join(" and ")
+                ),
+            ));
+            ui.say(Say::Wait("This takes a few minutes: go and get a coffee."));
+            let reply = unpack::run(
+                ui,
+                &harness,
+                &prompt,
+                run.model.as_deref(),
+                &root,
+                &[],
+                timeout,
+            )?;
             let mut landscape = unpack::parse(&reply).inspect_err(|_| {
                 let _ = unpack::write(&root.join("crosscut/landscape.reply.md"), &reply);
             })?;
-            eprintln!(
-                "\n{} {} cross-cutting concerns by leverage, with a quick look at the code.",
-                style::bold("Prioritising"),
-                landscape.cards.len()
-            );
+            ui.say(Say::Step(
+                "Prioritising",
+                &format!(
+                    "{} cross-cutting concerns by leverage, with a quick look at the code.",
+                    landscape.cards.len()
+                ),
+            ));
             let reply = unpack::run(
+                ui,
                 &harness,
                 &unpack::order_prompt(&landscape.cards, &about, &projects),
                 review_model.as_deref().or(run.model.as_deref()),
@@ -945,7 +917,7 @@ fn unpack_concerns(
                         .map(|i| landscape.cards[i].clone())
                         .collect()
                 }
-                Err(e) => eprintln!("{}", style::dim(&format!("  Kept the unpacked order: {e}"))),
+                Err(e) => ui.say(Say::Progress(&format!("Kept the unpacked order: {e}"))),
             }
             let json = serde_json::to_string_pretty(&landscape).expect("serialisable");
             unpack::write(&landscape_path, &json)?;
@@ -958,77 +930,45 @@ fn unpack_concerns(
         .iter()
         .filter(|card| !concerns.iter().any(|c| c.slug == card.slug))
         .collect();
-    eprintln!(
-        "\n\n{} {}\n",
-        style::bold(&match fresh.len() {
-            1 => "1 cross-cutting concern".to_string(),
-            n => format!("{n} cross-cutting concerns"),
-        }),
-        style::dim("highest leverage first")
-    );
-    for (i, card) in fresh.iter().enumerate() {
-        eprintln!(
-            "  {}  {}  {}",
-            style::dim(&format!("{:>2}", i + 1)),
-            card.title,
-            style::dim(&card.projects.join(" · "))
-        );
-    }
-    eprint!(
-        "\n{} > ",
-        style::dim("Enter to go through them one at a time")
-    );
-    let _ = std::io::Write::flush(&mut std::io::stderr());
-    let mut line = String::new();
-    let _ = std::io::BufRead::read_line(&mut input, &mut line);
+    ui.overview(&fresh);
     let (mut accepted, mut declined, mut skipped) = (Vec::new(), 0, 0);
     for (i, card) in fresh.iter().enumerate() {
-        eprint!("{}", unpack::render(card, i + 1, fresh.len()));
-        match unpack::ask(&mut input) {
+        let answer = ui.card(card, i + 1, fresh.len());
+        match &answer {
             unpack::Answer::Accept => {
                 unpack::accept(&root, card, &today)?;
-                eprintln!("  {}", style::good("✓ accepted"));
                 accepted.push(card.slug.clone());
             }
             unpack::Answer::Decline(reason) => {
-                unpack::decline(&root, card, &reason, &today)?;
-                eprintln!("  {}", style::dim("✗ declined"));
+                unpack::decline(&root, card, reason, &today)?;
                 declined += 1;
             }
             unpack::Answer::Skip => skipped += 1,
             unpack::Answer::Quit => break,
         }
+        ui.say(Say::Answered(&answer));
     }
-    drop(input);
-    eprintln!(
-        "\n\n{} {}",
-        style::bold(&format!("{} accepted", accepted.len())),
-        style::dim(&format!(
-            "{declined} declined, {skipped} skipped, of {}",
-            fresh.len()
-        ))
-    );
+    ui.say(Say::Summary {
+        accepted: accepted.len(),
+        declined,
+        skipped,
+        of: fresh.len(),
+    });
     if accepted.is_empty() {
         return Ok(ExitCode::SUCCESS);
     }
 
-    eprintln!(
-        "\n{} your code for the cross-cutting concerns you accepted.\n",
-        style::bold("Reviewing")
-    );
+    ui.say(Say::Step(
+        "Reviewing",
+        "your code for the cross-cutting concerns you accepted.",
+    ));
     let review = RunArgs {
         model: review_model.or(run.model.clone()),
         root: Some(root.clone()),
         ..run
     };
     let status = check(accepted, true, review, false)?;
-    println!();
-    map(None, Some(root.clone()))?;
-    println!(
-        "\n{}  file://{}",
-        style::bold("Report"),
-        report::write(&root)?.display()
-    );
+    ui.finished(&root)?;
     Ok(status)
 }
 

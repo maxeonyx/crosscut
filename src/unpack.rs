@@ -6,7 +6,6 @@
 //! be argued back up to a rule; a concern unpacked from a description can only be the rule. The
 //! review is what finds where each rule cashes out.
 
-use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -15,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::harness::{self, Harness};
 use crate::model::{self, Project};
-use crate::style;
+use crate::ui::{Say, Ui};
 
 const CARDS_OPEN: &str = "<crosscut-cards>";
 const CARDS_CLOSE: &str = "</crosscut-cards>";
@@ -100,46 +99,6 @@ pub fn prompt(
          }}\n\
          ```\n\n\
          Order the cards by leverage, highest first.\n",
-    )
-}
-
-/// What `crosscut unpack` is about to do, shown before it starts.
-pub fn what_happens(agent: &str) -> String {
-    let step = |n: &str, verb: &str, what: &str, note: &str| {
-        format!(
-            "  {}  {}  {}  {}\n",
-            style::dim(n),
-            style::bold(&format!("{verb:<10}")),
-            what,
-            style::dim(note)
-        )
-    };
-    format!(
-        "{}\n\n{}{}{}{}{}",
-        style::bold("What happens next"),
-        step(
-            "1",
-            "Describe",
-            "each repository, from its README",
-            "seconds; you can correct it"
-        ),
-        step(
-            "2",
-            "Unpack",
-            &format!(
-                "cross-cutting concerns for software like it, with {}",
-                style::accent(agent)
-            ),
-            "a few minutes; never sees your code"
-        ),
-        step(
-            "3",
-            "Prioritise",
-            "by leverage across your repositories",
-            "it can only reorder them"
-        ),
-        step("4", "Choose", "accept or decline each one", ""),
-        step("5", "Review", "your code, for the ones you accept", ""),
     )
 }
 
@@ -249,6 +208,7 @@ pub fn parse(reply: &str) -> Result<Landscape, String> {
 /// Runs the agent in `dir`, showing what it looks at as it goes, and returns its final reply.
 /// It may read the projects in `access`; with none, a Claude agent gets no tools at all.
 pub fn run(
+    ui: &dyn Ui,
     harness: &Harness,
     prompt: &str,
     model: Option<&str>,
@@ -281,7 +241,7 @@ pub fn run(
                 std::thread::sleep(Duration::from_millis(200));
                 let now = started.elapsed().as_secs();
                 if now >= shown.load(Ordering::Relaxed) + 30 {
-                    eprintln!("{}", style::dim(&format!("  {now:>4}s  still thinking")));
+                    ui.say(Say::Progress(&format!("{now:>4}s  still thinking")));
                     shown.store(now, Ordering::Relaxed);
                 }
             }
@@ -299,13 +259,10 @@ pub fn run(
                         if block["type"] == "tool_use" {
                             steps += 1;
                             let now = started.elapsed().as_secs();
-                            eprintln!(
-                                "{}",
-                                style::dim(&format!(
-                                    "  {now:>4}s  {}",
-                                    describe_tool(block, projects)
-                                ))
-                            );
+                            ui.say(Say::Progress(&format!(
+                                "{now:>4}s  {}",
+                                describe_tool(block, projects)
+                            )));
                             shown.store(now, Ordering::Relaxed);
                         }
                     }
@@ -327,11 +284,8 @@ pub fn run(
     if claude {
         let secs = started.elapsed().as_secs();
         match steps {
-            0 => eprintln!("{}", style::dim(&format!("  {secs:>4}s  done"))),
-            n => eprintln!(
-                "{}",
-                style::dim(&format!("  {secs:>4}s  done, after {n} steps"))
-            ),
+            0 => ui.say(Say::Progress(&format!("{secs:>4}s  done"))),
+            n => ui.say(Say::Progress(&format!("{secs:>4}s  done, after {n} steps"))),
         }
         return result.unwrap_or_else(|| Err("the agent finished without a result".into()));
     }
@@ -353,78 +307,6 @@ fn describe_tool(block: &serde_json::Value, projects: &[Project]) -> String {
     }
     let detail: String = detail.chars().take(110).collect();
     format!("{name:<5} {detail}")
-}
-
-/// One card, laid out for a terminal. Of its stories, it shows the first two and the last,
-/// which is usually where the rule does not apply.
-pub fn render(card: &Card, n: usize, of: usize) -> String {
-    let mut out = format!(
-        "\n\n{}  {}\n{}\n\n",
-        style::dim(&format!("{n}/{of}")),
-        style::bold(&card.title),
-        style::dim(&format!("      {}", card.projects.join(" · ")))
-    );
-    out += &line("  ", &card.justification);
-    out += "\n";
-    let stories = &card.stories;
-    let shown: Vec<&String> = if stories.len() > 3 {
-        vec![&stories[0], &stories[1], &stories[stories.len() - 1]]
-    } else {
-        stories.iter().collect()
-    };
-    for story in shown {
-        out += &line(&format!("  {} ", style::dim("•")), story);
-    }
-    out += &line(&format!("\n  {}  ", style::italic("Here")), &card.here);
-    out
-}
-
-/// One paragraph on one line after `prefix`, for the terminal to wrap at its own width.
-pub fn line(prefix: &str, text: &str) -> String {
-    format!(
-        "{prefix}{}\n",
-        text.split_whitespace().collect::<Vec<_>>().join(" ")
-    )
-}
-
-/// Asks for one card's answer on `input`, prompting on stderr.
-pub fn ask(input: &mut impl BufRead) -> Answer {
-    loop {
-        let key = |k: &str, rest: &str| format!("{}{}", style::accent(&style::bold(k)), rest);
-        eprint!(
-            "\n  {}   {}   {}   {} > ",
-            key("a", "ccept"),
-            key("d", "ecline"),
-            key("s", "kip"),
-            key("q", "uit")
-        );
-        let _ = std::io::stderr().flush();
-        let mut line = String::new();
-        if input.read_line(&mut line).unwrap_or(0) == 0 {
-            return Answer::Quit;
-        }
-        match line.trim().to_lowercase().as_str() {
-            "a" | "accept" => return Answer::Accept,
-            "s" | "skip" => return Answer::Skip,
-            "q" | "quit" => return Answer::Quit,
-            "d" | "decline" => {
-                eprint!("  {} > ", style::dim("Why? (optional)"));
-                let _ = std::io::stderr().flush();
-                let mut reason = String::new();
-                let _ = input.read_line(&mut reason);
-                return Answer::Decline(reason.trim().to_string());
-            }
-            _ => {}
-        }
-    }
-}
-
-/// A yes-or-no question, yes by default.
-pub fn confirm(input: &mut impl BufRead, question: &str) -> bool {
-    eprint!("{} {} > ", style::bold(question), style::dim("[Y/n]"));
-    let _ = std::io::stderr().flush();
-    let mut line = String::new();
-    input.read_line(&mut line).unwrap_or(0) > 0 && !line.trim().to_lowercase().starts_with('n')
 }
 
 /// The concern directory for an accepted card: its definition, and a prompt check that
@@ -505,28 +387,6 @@ pub fn about(root: &Path, project: &str) -> Option<String> {
 
 pub fn about_path(root: &Path, project: &str) -> PathBuf {
     root.join("crosscut/about").join(format!("{project}.md"))
-}
-
-/// Shows a new description and asks whether to keep it or replace it.
-pub fn confirm_about(input: &mut impl BufRead, project: &str, text: &str) -> String {
-    eprint!(
-        "\n{}",
-        line(
-            &format!("  {}  ", style::bold(project)),
-            &style::italic(text.trim())
-        )
-    );
-    eprint!(
-        "  {} > ",
-        style::dim("Enter to keep it, or type a better description")
-    );
-    let _ = std::io::stderr().flush();
-    let mut line = String::new();
-    let _ = input.read_line(&mut line);
-    match line.trim() {
-        "" => text.trim().to_string(),
-        better => better.to_string(),
-    }
 }
 
 pub fn write(path: &Path, text: &str) -> Result<(), String> {
