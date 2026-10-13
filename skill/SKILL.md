@@ -262,12 +262,21 @@ The seed set is nothing like a checklist:
 - **It must not be over-applied.** A seed belongs in a landscape only when this
   software gives it a real story, a generic concern and a concrete instance.
   A seed that does not fit is left out, not stretched to fit, and never padded
-  in as "not applicable". A landscape that mostly restates the seed set has
-  failed. So has one that forces a seed's shape onto a kind of software it does
-  not suit. Most of a good landscape comes from the software in front of you.
+  in as "not applicable". A landscape padded with seeds that have no instance
+  here has failed. So has one that forces a seed's shape onto a kind of
+  software it does not suit. Every instance in a good landscape comes from the
+  software in front of you.
 
 Discovery finds which concerns apply here, the concrete instances in this
-person's software, and above all the ones no seed anticipated.
+person's software, and the ones no seed anticipated.
+
+**A concern is the most general form of the rule, never the bug that revealed
+it.** The instances show how it cashes out in this project. The rule is kept
+general so that reviewing for it again later finds completely different
+instances of the same concern. In Max's words, about a card that described one
+service's deploy handover: "That's way too specific. It's about ownership,
+right? The general rule is what we want the concern to be. not the specific
+way it [cashes] out in this project."
 
 A landscape for one person's projects is ephemeral. It can, and should, be
 regenerated at any time by prompting an agent again. So it never needs to be

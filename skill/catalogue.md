@@ -3,7 +3,7 @@
 These are concerns from the common landscape that most software shares, written to the standard CrossCut aims for. They come from seven rounds of calibration with a human: most were rated "Perfect", and the rest were written to the same standard.
 
 They lead by example. They are **not** a checklist:
-- **Most of a good landscape comes from the software in front of you.** A landscape that mostly restates these seeds has failed.
+- **A seed with real instances here is a good card.** Use its rule as written and bring the instances. A landscape padded with seeds that have no instance here has failed.
 - **Never over-apply a seed.** Raise one only when this software gives it a real story and a concrete instance. A seed that does not fit is left out, never stretched to fit and never padded in as "not applicable".
 - **Use them to learn the grain.** Each is one small rule, true as written, grounded in a concept a computer scientist would name, and backed by several concrete stories that include where it does not apply. Your discoveries should read like these.
 
