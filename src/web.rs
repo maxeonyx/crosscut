@@ -11,7 +11,7 @@ use std::sync::{Arc, Condvar, Mutex};
 
 use serde_json::{json, Value};
 
-use crate::ui::{plan_steps, shown_stories, Say, Ui};
+use crate::ui::{plan_steps, Say, Ui};
 use crate::unpack::{Answer, Card};
 use crate::workspace::{parse_choice, Repo};
 
@@ -179,9 +179,9 @@ fn serve(shared: &Shared, mut request: tiny_http::Request) {
 fn card_json(card: &Card) -> Value {
     json!({
         "title": card.title,
-        "projects": card.projects,
+        "projects": card.projects(),
         "justification": card.justification,
-        "stories": shown_stories(card),
+        "stories": card.stories,
         "here": card.here,
     })
 }
@@ -196,6 +196,13 @@ impl Ui for Browser {
             Say::Wait(t) => json!({ "k": "wait", "t": t }),
             Say::Progress(t) => json!({ "k": "progress", "t": t.trim() }),
             Say::Item(name, detail) => json!({ "k": "item", "name": name, "t": detail }),
+            Say::Cell {
+                concern,
+                project,
+                doing,
+                status,
+            } => json!({ "k": "cell", "concern": concern, "project": project,
+                         "t": doing.trim(), "status": status }),
             Say::Answered(answer, title) => {
                 json!({ "k": "answered", "title": title, "a": match answer {
                     Answer::Accept => "accepted",
@@ -260,7 +267,7 @@ impl Ui for Browser {
             .into_iter()
             .map(|row| match row {
                 Some(i) => {
-                    json!({ "n": i + 1, "title": cards[i].title, "projects": cards[i].projects })
+                    json!({ "n": i + 1, "title": cards[i].title, "projects": cards[i].projects() })
                 }
                 None => json!({ "more": cards.len() - 5 }),
             })

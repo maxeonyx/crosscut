@@ -250,7 +250,7 @@ fn main() -> ExitCode {
             agentic,
             run,
             dry_run,
-        }) => check(slugs, agentic, run, dry_run),
+        }) => check(slugs, agentic, run, dry_run, &ui::Terminal),
         Some(Cmd::Unpack {
             dirs,
             cards,
@@ -415,6 +415,7 @@ impl Runner {
         mechanism: &Mechanism,
         project: &Project,
         siblings: &[Project],
+        progress: &(dyn Fn(&str) + Sync),
     ) -> Result<(String, String, Option<String>), String> {
         match mechanism {
             Mechanism::Exec(path) => {
@@ -432,10 +433,18 @@ impl Runner {
             Mechanism::Prompt(check) => {
                 let harness = self.harness.as_ref().map_err(Clone::clone)?;
                 let prompt = self.cell_prompt(concern, check, project, siblings);
-                let (mut cmd, stdin) = harness.command(&prompt, self.model.as_deref())?;
-                cmd.current_dir(&project.dir);
-                cell_env(&mut cmd, concern, project, siblings);
-                let out = harness::run(cmd, stdin.then_some(prompt.as_str()), self.timeout)?;
+                let out = unpack::run(
+                    progress,
+                    harness,
+                    &prompt,
+                    self.model.as_deref(),
+                    &|cmd| {
+                        cmd.current_dir(&project.dir);
+                        cell_env(cmd, concern, project, siblings);
+                    },
+                    siblings,
+                    self.timeout,
+                )?;
                 let start = out
                     .rfind(CELL_OPEN)
                     .ok_or("the agent's reply had no <crosscut-cell> answer")?;
@@ -587,6 +596,7 @@ fn check(
     agentic: bool,
     run: RunArgs,
     dry_run: bool,
+    ui: &dyn ui::Ui,
 ) -> Result<ExitCode, String> {
     let root = model::find_root(run.root.clone())?;
     let concerns = select_concerns(&root, &slugs)?;
@@ -638,7 +648,20 @@ fn check(
 
     let results = pool(run.jobs, &cells, |(concern, project)| {
         let mechanism = concern.mechanism().expect("selected above");
-        let result = runner.cell(concern, &mechanism, project, &all);
+        let say = |doing: &str, status: Option<&str>| {
+            ui.say(Say::Cell {
+                concern: concern.name(),
+                project: &project.name,
+                doing,
+                status,
+            })
+        };
+        say("starting", None);
+        let result = runner.cell(concern, &mechanism, project, &all, &|t| say(t, None));
+        match &result {
+            Ok((status, _, _)) => say("", Some(status)),
+            Err(_) => say("could not run", Some("failed")),
+        }
         (matches!(mechanism, Mechanism::Prompt(_)), result)
     });
 
@@ -876,6 +899,7 @@ fn unpack_concerns(
             let harness = Harness::resolve(run.harness.clone())?;
             let timeout = Duration::from_secs(run.timeout);
             ui.say(Say::Plan(harness.name()));
+            let progress = |text: &str| ui.say(Say::Progress(text));
             // Unpacking works from short descriptions, never from the code.
             let mut about = Vec::new();
             for project in &projects {
@@ -884,11 +908,13 @@ fn unpack_concerns(
                     None => {
                         ui.say(Say::Step("Describing", &project.name));
                         let draft = unpack::run(
-                            ui,
+                            &progress,
                             &harness,
                             &unpack::describe_prompt(project),
                             review_model.as_deref().or(run.model.as_deref()),
-                            &project.dir,
+                            &|c| {
+                                c.current_dir(&project.dir);
+                            },
                             std::slice::from_ref(project),
                             timeout,
                         )?;
@@ -916,11 +942,13 @@ fn unpack_concerns(
             ));
             ui.say(Say::Wait("This takes a few minutes: go and get a coffee."));
             let reply = unpack::run(
-                ui,
+                &progress,
                 &harness,
                 &prompt,
                 run.model.as_deref(),
-                &root,
+                &|c| {
+                    c.current_dir(&root);
+                },
                 &[],
                 timeout,
             )?;
@@ -935,11 +963,13 @@ fn unpack_concerns(
                 ),
             ));
             let reply = unpack::run(
-                ui,
+                &progress,
                 &harness,
                 &unpack::order_prompt(&landscape.cards, &about, &projects),
                 review_model.as_deref().or(run.model.as_deref()),
-                &root,
+                &|c| {
+                    c.current_dir(&root);
+                },
                 &projects,
                 timeout.min(Duration::from_secs(600)),
             );
@@ -1001,7 +1031,7 @@ fn unpack_concerns(
         root: Some(root.clone()),
         ..run
     };
-    let status = check(accepted, true, review, false)?;
+    let status = check(accepted, true, review, false, ui)?;
     ui.finished(&root)?;
     Ok(status)
 }
@@ -1162,7 +1192,7 @@ fn test(slugs: Vec<String>, agentic: bool, run: RunArgs) -> Result<ExitCode, Str
     let results = pool(run.jobs, &jobs, |(concern, _, projects, project, _)| {
         let mechanism = concern.mechanism().expect("selected above");
         match projects.iter().find(|p| &p.name == project) {
-            Some(p) => runner.cell(concern, &mechanism, p, projects),
+            Some(p) => runner.cell(concern, &mechanism, p, projects, &|_| {}),
             None => Err(format!(
                 "`expect` names `{project}`, which is not a directory in this case"
             )),

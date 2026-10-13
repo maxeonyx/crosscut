@@ -28,6 +28,14 @@ pub enum Say<'a> {
     Item(&'a str, &'a str),
     /// The outcome of one card, and its title.
     Answered(&'a Answer, &'a str),
+    /// A review of one project for one concern: what its agent is doing, or its status once
+    /// it is done.
+    Cell {
+        concern: &'a str,
+        project: &'a str,
+        doing: &'a str,
+        status: Option<&'a str>,
+    },
     /// How the choosing went.
     Summary {
         accepted: usize,
@@ -73,17 +81,6 @@ fn line(prefix: &str, text: &str) -> String {
     )
 }
 
-/// A card's stories as shown: the first two and the last, which is usually where the rule
-/// does not apply.
-pub fn shown_stories(card: &Card) -> Vec<&String> {
-    let stories = &card.stories;
-    if stories.len() > 3 {
-        vec![&stories[0], &stories[1], &stories[stories.len() - 1]]
-    } else {
-        stories.iter().collect()
-    }
-}
-
 /// Which cards an overview lists: all of a short list, or the first three and the last two
 /// of a long one, with `None` where the rest are left out.
 pub fn overview_rows(n: usize) -> Vec<Option<usize>> {
@@ -125,7 +122,7 @@ fn dwell(say: &Say) -> Duration {
         Say::Step(..) => 900,
         Say::Item(..) => 500,
         Say::Answered(..) => 300,
-        Say::Title | Say::Progress(_) => 0,
+        Say::Title | Say::Progress(_) | Say::Cell { .. } => 0,
     })
 }
 
@@ -155,6 +152,8 @@ impl Ui for Terminal {
             Say::Wait(text) => eprintln!("{}", style::italic(text)),
             Say::Progress(text) => eprintln!("{}", style::dim(&format!("  {text}"))),
             Say::Item(name, detail) => eprintln!("  {name}  {}", style::dim(detail)),
+            // The terminal prints each review's outcome as it is recorded.
+            Say::Cell { .. } => {}
             Say::Answered(answer, _) => match answer {
                 Answer::Accept => eprintln!("  {}", style::good("✓ accepted")),
                 Answer::Decline(_) => eprintln!("  {}", style::dim("✗ declined")),
@@ -262,7 +261,7 @@ impl Ui for Terminal {
                     "  {}  {}  {}",
                     style::dim(&format!("{:>2}", i + 1)),
                     cards[i].title,
-                    style::dim(&cards[i].projects.join(" · "))
+                    style::dim(&cards[i].projects().join(" · "))
                 ),
                 None => eprintln!(
                     "  {}",
@@ -282,14 +281,17 @@ impl Ui for Terminal {
             "\n\n{}  {}\n{}\n\n",
             style::dim(&format!("{n}/{of}")),
             style::bold(&card.title),
-            style::dim(&format!("      {}", card.projects.join(" · ")))
+            style::dim(&format!("      {}", card.projects().join(" · ")))
         );
         out += &line("  ", &card.justification);
-        out += "\n";
-        for story in shown_stories(card) {
+        out += &format!("\n  {}\n", style::bold("Stakeholder stories"));
+        for story in &card.stories {
             out += &line(&format!("  {} ", style::dim("•")), story);
         }
-        out += &line(&format!("\n  {}  ", style::italic("Here")), &card.here);
+        out += &format!("\n  {}\n", style::bold("Here"));
+        for here in &card.here {
+            out += &line(&format!("  {}  ", style::italic(&here.project)), &here.story);
+        }
         eprint!("{out}");
         let key = |k: &str, rest: &str| format!("{}{}", style::accent(&style::bold(k)), rest);
         loop {

@@ -5,7 +5,7 @@ These are concerns from the common landscape that most software shares, written 
 They lead by example. They are **not** a checklist:
 - **A seed with real instances here is a good card.** Use its rule as written and bring the instances. A landscape padded with seeds that have no instance here has failed.
 - **Never over-apply a seed.** Raise one only when this software gives it a real story and a concrete instance. A seed that does not fit is left out, never stretched to fit and never padded in as "not applicable".
-- **Use them to learn the grain.** Each is one small rule, true as written, grounded in a concept a computer scientist would name, and backed by several concrete stories that include where it does not apply. Your discoveries should read like these.
+- **Use them to learn the grain.** Each is one small rule, true as written, grounded in a concept a computer scientist would name, and backed by several concrete examples that include where it does not apply. Your discoveries should read like these.
 
 ## What made a rule Perfect, and what sank the rest
 

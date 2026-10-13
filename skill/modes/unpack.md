@@ -8,10 +8,24 @@ If you are working inside a session that can see the code, do not read it for th
 
 A card is a concern in its finished form, as in [../catalogue.md](../catalogue.md):
 - **the rule:** one small sentence, in the rule form ("X should Y"), true as written, hedged only where real exceptions exist;
-- **the justification:** the concept behind it, named as a computer scientist would name it (time-of-check to time-of-use, the birthday bound, survivorship bias, identity elements), and why the rule follows;
-- **stories:** several, concrete and varied, from different kinds of software, and at least one that says where the rule does not apply;
-- **here:** which of the projects it applies to, and how it tends to cash out in software like them;
+- **the justification:** the concept behind it, named as a computer scientist would name it (time-of-check to time-of-use, the birthday bound, survivorship bias, identity elements), why the rule follows, and where it does not apply;
+- **stakeholder stories:** two or three, from software of any kind, never from these projects;
+- **here:** one stakeholder story for each of the projects it applies to;
 - **how to review:** how a reviewer with the code would find every instance of it.
+
+### Stakeholder stories
+
+A concern exists because someone wants something from software. A stakeholder story says who, in what situation, wants what, and what they need from the software because of it:
+
+> As <a stakeholder>, <in a situation> I want <something>, so I need <what the rule gives them>.
+
+The stakeholders are the people who use the software and the developers who work on it. Either can be a human or an agent. Max's example of the form: "As a developer, I repeatedly make changes to the app and need to see the result, so I need this loop to happen as fast as possible."
+
+Write what the stakeholder actually wants, which is the value they get, not a proxy for it. Max, about his own second example ("As a user, I want no disruption to my data, no matter what goes on behind the scenes"): "the user doesn't actually care about the *data*, necessarily, but about the value they get from the app".
+
+The stakeholder stories are general. They come from software of any kind, and they name none of these projects, their features or their data. The seeds' examples show how varied they can be.
+
+**Here** brings the rule to each project, as one more stakeholder story: who wants what from this project, as its description tells it. It is not about the code. You have not seen the code, so you cannot know whether the project already does this, and you must not guess: no bugs, no gaps, no fixes. In Max's words: "don't write about the bug, write about what the stakeholder ... wants from the software". For a ticker feed: "As a trader watching the open, I want every price as it happens, so I need to see when the feed has fallen behind."
 
 ## 1. Generate widely
 
@@ -43,7 +57,7 @@ Drop a candidate when any of these is true:
 - **It is a bug or a gotcha.** This is not a bug hunt: a defect is not a concern. Neither is a platform trap any agent could find without taste.
 - **It is about change** (migrations, API changes, renames). A change is not a property of the code.
 - **It is compliance, security or obligation** ("is there a linter", "does every PR get two approvals"). That includes security-flavoured hygiene that buys the stakeholders nothing. Stakeholders are the people who use the software and the developers and coding agents who work on it. Separating development and production installs of an app with one user is not worth a card; a change that lets an agent work on it safely can be.
-- **It is too absolute.** "Every" and "never" need something close to a proof. Prefer "generally" or "should not" where there are real exceptions, and name them in a story.
+- **It is too absolute.** "Every" and "never" need something close to a proof. Prefer "generally" or "should not" where there are real exceptions, and name them in the justification.
 - **It needs a re-architecture to act on.** Leave it out of the cards.
 
 ## 4. Rank by leverage

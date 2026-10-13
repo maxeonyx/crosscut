@@ -250,10 +250,11 @@ Design each concern this way:
    not "the identity that authorises updates". Generic does not mean
    abstract. A reader who knows the thing understands the rule on first
    reading; a reader who doesn't is helped by the justification.
-4. Justify the rule in the academic language, and make it concrete with
-   several stories. The stories say why it wasn't already done, whether others
-   have thought of it, whether a builder would find it condescending, and where
-   it does and doesn't apply.
+4. Justify the rule in the academic language, and say where it doesn't
+   apply. Then give the stakeholder stories it serves: "As <a stakeholder>,
+   <in a situation> I want <something>, so I need <what the rule gives>."
+   Stakeholders are the people who use the software and the developers who
+   work on it, human or agent, and a story says what they actually value.
 
 For example, a page lost typed text when a redraw and a database sync replaced
 it with older copies. The concepts are replicas and the session guarantees:

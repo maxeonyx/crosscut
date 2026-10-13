@@ -7,6 +7,7 @@
 //! review is what finds where each rule cashes out.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -14,7 +15,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::harness::{self, Harness};
 use crate::model::{self, Project};
-use crate::ui::{Say, Ui};
 
 const CARDS_OPEN: &str = "<crosscut-cards>";
 const CARDS_CLOSE: &str = "</crosscut-cards>";
@@ -33,12 +33,23 @@ pub struct Card {
     pub slug: String,
     pub title: String,
     pub justification: String,
+    /// Stakeholder stories from software of any kind.
     pub stories: Vec<String>,
-    /// The projects it applies to.
-    pub projects: Vec<String>,
-    /// How it tends to cash out in software like these projects.
-    pub here: String,
+    /// A stakeholder story for each project it applies to.
+    pub here: Vec<Here>,
     pub how_to_review: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Here {
+    pub project: String,
+    pub story: String,
+}
+
+impl Card {
+    pub fn projects(&self) -> Vec<&str> {
+        self.here.iter().map(|h| h.project.as_str()).collect()
+    }
 }
 
 pub enum Answer {
@@ -89,10 +100,9 @@ pub fn prompt(
            \"cards\": [\n    {{\n      \
              \"slug\": \"kebab-case-name\",\n      \
              \"title\": \"The rule, in the rule form\",\n      \
-             \"justification\": \"The concept behind it, in the terms a computer scientist would use, and why it holds.\",\n      \
-             \"stories\": [\"A concrete story, from any kind of software\", \"...including where it does not apply\"],\n      \
-             \"projects\": [\"the names of the projects it applies to\"],\n      \
-             \"here\": \"How it tends to cash out in software like these projects, in one or two sentences\",\n      \
+             \"justification\": \"The concept behind it, in the terms a computer scientist would use, why it holds, and where it does not apply.\",\n      \
+             \"stories\": [\"As <stakeholder>, <situation and want>, so I need <what the rule gives>. From software of any kind, never these projects.\", \"...\"],\n      \
+             \"here\": [{{\"project\": \"the name of a project it applies to\", \"story\": \"As <stakeholder of this project>, ..., so I need ...\"}}],\n      \
              \"how_to_review\": \"How a reviewer with the code finds every instance of this in a project: what to search for, and what to read\"\n    \
            }}\n  \
          ]\n\
@@ -118,13 +128,9 @@ pub fn order_prompt(cards: &[Card], about: &[(String, String)], projects: &[Proj
     let cards: String = cards
         .iter()
         .map(|c| {
-            format!(
-                "- `{}`: {} (applies to {}). {}\n",
-                c.slug,
-                c.title,
-                c.projects.join(", "),
-                c.here
-            )
+            let here: Vec<String> =
+                c.here.iter().map(|h| format!("{}: {}", h.project, h.story)).collect();
+            format!("- `{}`: {}. {}\n", c.slug, c.title, here.join(" "))
         })
         .collect();
     format!(
@@ -217,16 +223,16 @@ pub fn parse(reply: &str) -> Result<Landscape, String> {
 /// Runs the agent in `dir`, showing what it looks at as it goes, and returns its final reply.
 /// It may read the projects in `access`; with none, a Claude agent gets no tools at all.
 pub fn run(
-    ui: &dyn Ui,
+    progress: &(dyn Fn(&str) + Sync),
     harness: &Harness,
     prompt: &str,
     model: Option<&str>,
-    dir: &Path,
+    prepare: &dyn Fn(&mut Command),
     access: &[Project],
     timeout: Duration,
 ) -> Result<String, String> {
     let (mut cmd, stdin) = harness.command(prompt, model)?;
-    cmd.current_dir(dir);
+    prepare(&mut cmd);
     let claude = matches!(harness, Harness::Claude);
     if claude {
         cmd.args(["--output-format", "stream-json", "--verbose"]);
@@ -250,7 +256,7 @@ pub fn run(
                 std::thread::sleep(Duration::from_millis(200));
                 let now = started.elapsed().as_secs();
                 if now >= shown.load(Ordering::Relaxed) + 30 {
-                    ui.say(Say::Progress(&format!("{now:>4}s  still thinking")));
+                    progress(&format!("{now:>4}s  still thinking"));
                     shown.store(now, Ordering::Relaxed);
                 }
             }
@@ -268,10 +274,7 @@ pub fn run(
                         if block["type"] == "tool_use" {
                             steps += 1;
                             let now = started.elapsed().as_secs();
-                            ui.say(Say::Progress(&format!(
-                                "{now:>4}s  {}",
-                                describe_tool(block, projects)
-                            )));
+                            progress(&format!("{now:>4}s  {}", describe_tool(block, projects)));
                             shown.store(now, Ordering::Relaxed);
                         }
                     }
@@ -293,8 +296,8 @@ pub fn run(
     if claude {
         let secs = started.elapsed().as_secs();
         match steps {
-            0 => ui.say(Say::Progress(&format!("{secs:>4}s  done"))),
-            n => ui.say(Say::Progress(&format!("{secs:>4}s  done, after {n} steps"))),
+            0 => progress(&format!("{secs:>4}s  done")),
+            n => progress(&format!("{secs:>4}s  done, after {n} steps")),
         }
         return result.unwrap_or_else(|| Err("the agent finished without a result".into()));
     }
@@ -324,18 +327,23 @@ pub fn accept(root: &Path, card: &Card, today: &str) -> Result<PathBuf, String> 
     let dir = root.join("crosscut/concerns").join(&card.slug);
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     let stories: String = card.stories.iter().map(|s| format!("- {s}\n")).collect();
+    let here: String = card
+        .here
+        .iter()
+        .map(|h| format!("- **{}**: {}\n", h.project, h.story))
+        .collect();
     let definition = format!(
-        "# {}\n\n{}\n\n## User stories\n\n{stories}\n## What it looks like here\n\n{}\n\n\
+        "# {}\n\n{}\n\n## Stakeholder stories\n\n{stories}\n## Here\n\n{here}\n\
          Accepted {today}.\n\n## Decisions\n",
-        card.title, card.justification, card.here
+        card.title, card.justification
     );
     let check = format!(
         "Review this project against the rule in the concern, as a reviewer who wants every \
-         real instance and no false ones. The rule's own stories say where it does not apply: \
-         respect them.\n\n{}\n\n\
+         real instance and no false ones. Where the concern says the rule does not apply, \
+         respect that.\n\n{}\n\n\
          Status: `yes` when the rule holds everywhere it applies, `partly` when it holds in \
          some places and not others, `missing` when it does not hold where it matters most, \
-         `n/a` when none of the stories apply to this project.\n",
+         `n/a` when the rule has nothing to apply to in this project.\n",
         card.how_to_review
     );
     write(&dir.join("concern.md"), &definition)?;
@@ -414,8 +422,7 @@ mod tests {
                 title: String::new(),
                 justification: String::new(),
                 stories: vec![],
-                projects: vec![],
-                here: String::new(),
+                here: vec![],
                 how_to_review: String::new(),
             })
             .collect()

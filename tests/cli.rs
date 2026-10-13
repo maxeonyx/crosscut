@@ -712,12 +712,12 @@ Thinking out loud first.
 {"cards": [
  {"slug": "log-once", "title": "Each error should be logged once, where it is handled",
   "justification": "Only the handler knows how serious an error is.",
-  "stories": ["One timeout becomes four error lines.", "Debug traces are a separate stream."],
-  "projects": ["api"], "here": "APIs tend to log in every layer an error passes through.",
+  "stories": ["As an operator paged at night, I want one line per failure, so I need each error logged once."],
+  "here": [{"project": "api", "story": "As the api's on-call developer, I want to count real failures, so I need each logged once."}],
   "how_to_review": "Search for log calls inside except blocks that re-raise."},
  {"slug": "as-of", "title": "Derived data that can go stale should carry its as-of time",
-  "justification": "A failed refresh looks like a quiet day.", "stories": ["A dashboard looks normal for three days."],
-  "projects": ["api"], "here": "Cached responses.", "how_to_review": "Find derived tables and reports."}
+  "justification": "A failed refresh looks like a quiet day.", "stories": ["As a reader of a dashboard, I want to trust its numbers, so I need to know how old they are."],
+  "here": [{"project": "api", "story": "As a client of the api, I want current records, so I need to know their age."}], "how_to_review": "Find derived tables and reports."}
 ]}
 </crosscut-cards>
 JSON
@@ -789,7 +789,8 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
         "{err}"
     );
     assert!(
-        err.contains("Here  APIs tend to log in every layer"),
+        err.contains("Stakeholder stories\n  • As an operator paged at night")
+            && err.contains("Here\n  api  As the api's on-call developer"),
         "{err}"
     );
     assert!(
@@ -805,7 +806,8 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
     let definition = fs::read_to_string(concern.join("concern.md")).unwrap();
     assert!(definition.starts_with("# Each error should be logged once, where it is handled\n"));
     assert!(
-        definition.contains("APIs tend to log in every layer"),
+        definition.contains("## Stakeholder stories\n\n- As an operator paged at night")
+            && definition.contains("## Here\n\n- **api**: As the api's on-call developer"),
         "{definition}"
     );
     assert!(definition.contains("## Decisions"), "{definition}");
