@@ -717,10 +717,6 @@ fn check(
 /// Anywhere else, say what CrossCut needs, recommend making a workspace of fresh clones, and
 /// say what to do instead.
 fn welcome() -> Result<ExitCode, String> {
-    eprintln!(
-        "CrossCut. Every project has more worth caring about than the task at hand.\n\
-         An agent reads your projects and proposes concerns; you keep the ones you want.\n"
-    );
     let mut input = std::io::stdin().lock();
     let run = RunArgs {
         projects: Vec::new(),
@@ -741,48 +737,47 @@ fn welcome() -> Result<ExitCode, String> {
 
     let here =
         std::env::current_dir().map_err(|e| format!("cannot read current directory: {e}"))?;
-    let suggested = here.join("crosscut-workspace");
-    if suggested.join("crosscut").is_dir() {
-        eprintln!(
-            "You already have a workspace at {0}. To carry on there:\n  cd {0} && crosscut\n",
-            tilde(&suggested)
-        );
+    // The list may scroll off the top. What must be read sits at the bottom, next to the
+    // prompt, and number 1, the most recently used repository, is nearest to it.
+    let repos = workspace::find(&here, 3);
+    for (i, repo) in repos.iter().enumerate().rev() {
+        let clones = match repo.clones.len() {
+            1 => tilde(&repo.clones[0]),
+            n => format!("{n} clones"),
+        };
+        eprintln!("  {:>3}. {}  ({clones})", i + 1, repo.name);
     }
+    let suggested = here.join("crosscut-workspace");
     let harness = Harness::resolve(None);
     eprintln!(
-        "What it needs:\n  \
-         - the repositories to look at, cloned side by side in one workspace directory;\n  \
-         - a coding agent to do the reading: claude, codex or opencode, logged in. {}\n\
-         It never changes your own checkouts.\n\n\
-         Recommended: make a workspace at {}, with fresh clones of the repositories you\n\
-         pick below.\n\n\
-         If you would rather not:\n  \
-         - use checkouts you already have, in place: crosscut discover ~/src/api ~/src/web\n  \
-         - let an agent drive: without a terminal, `crosscut` prints instructions for it.\n",
+        "\nCrossCut: an agent reads your repositories and proposes concerns worth keeping visible.\n\n\
+         It needs the repositories cloned side by side in a workspace, and a logged-in coding\n\
+         agent: claude, codex or opencode. {}\n\
+         Recommended: pick repositories{}.\n\
+         They are cloned fresh into {}.\n\
+         Your own checkouts are never touched.\n\
+         Instead, to use checkouts in place: crosscut discover ~/src/api ~/src/web",
         match &harness {
             Ok(h) => format!("Found: {}.", h.name()),
             Err(_) => "None found.".into(),
         },
+        if repos.is_empty() {
+            format!(
+                " as owner/name (none found in {} or three levels below)",
+                tilde(&here)
+            )
+        } else {
+            " above (1 is the one you used last)".into()
+        },
         tilde(&suggested)
     );
-    let harness = harness?;
-
-    let repos = workspace::find(&here, 3);
-    if repos.is_empty() {
+    if suggested.join("crosscut").is_dir() {
         eprintln!(
-            "No repositories in {} or three levels below it; name them as owner/name.",
-            tilde(&here)
+            "You already have a workspace there. To carry on in it: cd {} && crosscut",
+            tilde(&suggested)
         );
-    } else {
-        eprintln!("Repositories on this machine:");
-        for (i, repo) in repos.iter().enumerate() {
-            let clones = match repo.clones.len() {
-                1 => tilde(&repo.clones[0]),
-                n => format!("{n} clones"),
-            };
-            eprintln!("  {:>3}. {}  ({clones})", i + 1, repo.name);
-        }
     }
+    let harness = harness?;
     let chosen = workspace::choose(&mut input, &repos);
     if chosen.is_empty() {
         return Ok(ExitCode::SUCCESS);

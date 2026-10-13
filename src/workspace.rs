@@ -4,6 +4,7 @@
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::SystemTime;
 
 /// One repository, with every local clone of it that was found.
 #[derive(Debug, PartialEq)]
@@ -13,9 +14,12 @@ pub struct Repo {
     /// Where to clone it from: its origin remote, or the local path if it has none.
     pub source: String,
     pub clones: Vec<PathBuf>,
+    /// When any of its clones was last committed to, checked out or fetched.
+    pub touched: SystemTime,
 }
 
-/// Repositories at `dir` and up to `depth` levels below it, one entry per origin remote.
+/// Repositories at `dir` and up to `depth` levels below it, one entry per origin remote, most
+/// recently used first.
 pub fn find(dir: &Path, depth: usize) -> Vec<Repo> {
     let mut repos: Vec<Repo> = Vec::new();
     for clone in git_dirs(dir, depth) {
@@ -33,19 +37,24 @@ pub fn find(dir: &Path, depth: usize) -> Vec<Repo> {
                 clone.display().to_string(),
             ),
         };
+        let touched = touched(&clone);
         match repos
             .iter_mut()
             .find(|r| remote.is_some() && r.name == name)
         {
-            Some(repo) => repo.clones.push(clone),
+            Some(repo) => {
+                repo.clones.push(clone);
+                repo.touched = repo.touched.max(touched);
+            }
             None => repos.push(Repo {
                 name,
                 source,
                 clones: vec![clone],
+                touched,
             }),
         }
     }
-    repos.sort_by_key(|r| r.name.to_lowercase());
+    repos.sort_by(|a, b| b.touched.cmp(&a.touched));
     repos
 }
 
@@ -73,6 +82,14 @@ fn git_dirs(dir: &Path, depth: usize) -> Vec<PathBuf> {
         .iter()
         .flat_map(|sub| git_dirs(sub, depth - 1))
         .collect()
+}
+
+fn touched(clone: &Path) -> SystemTime {
+    ["index", "HEAD", "FETCH_HEAD"]
+        .iter()
+        .filter_map(|f| clone.join(".git").join(f).metadata().ok()?.modified().ok())
+        .max()
+        .unwrap_or(SystemTime::UNIX_EPOCH)
 }
 
 /// The `origin` URL in a git config file.
@@ -190,33 +207,41 @@ mod tests {
     }
 
     #[test]
-    fn clones_of_one_repository_are_one_entry_and_repositories_are_not_searched_inside() {
+    fn clones_of_one_repository_are_one_entry_most_recently_used_first() {
         let dir = tempfile::tempdir().unwrap();
         let config = |remote: &str| {
             format!("[core]\n\tbare = false\n[remote \"origin\"]\n\turl = {remote}\n\tfetch = x\n")
         };
-        for (path, remote) in [
+        // Each clone was last used `hours` ago. Repositories are not searched inside.
+        let clones: [(&str, Option<&str>, u64); 6] = [
             (
                 "task-a/DataCentral",
                 Some("git@github.com:NZX/DataCentral.git"),
+                50,
             ),
             (
                 "task-b/DataCentral",
                 Some("https://github.com/NZX/DataCentral"),
+                1,
             ),
-            ("tools/trunc", Some("git@github.com:maxeonyx/trunc.git")),
+            ("tools/trunc", Some("git@github.com:maxeonyx/trunc.git"), 5),
             (
                 "tools/trunc/vendor/inner",
                 Some("git@github.com:x/inner.git"),
+                0,
             ),
-            ("scratch", None),
-            ("a/b/c/too-deep", Some("git@github.com:x/deep.git")),
-        ] {
+            ("scratch", None, 9),
+            ("a/b/c/too-deep", Some("git@github.com:x/deep.git"), 0),
+        ];
+        for (path, remote, hours) in clones {
             let git = dir.path().join(path).join(".git");
             std::fs::create_dir_all(&git).unwrap();
             if let Some(remote) = remote {
                 std::fs::write(git.join("config"), config(remote)).unwrap();
             }
+            let ago = std::time::Duration::from_secs(hours * 3600);
+            let head = std::fs::File::create(git.join("HEAD")).unwrap();
+            head.set_modified(SystemTime::now() - ago).unwrap();
         }
         let repos = find(dir.path(), 3);
         let names: Vec<(&str, usize)> = repos
@@ -226,12 +251,12 @@ mod tests {
         assert_eq!(
             names,
             [
-                ("maxeonyx/trunc", 1),
                 ("NZX/DataCentral", 2),
+                ("maxeonyx/trunc", 1),
                 ("scratch", 1)
             ]
         );
-        assert_eq!(repos[1].source, "git@github.com:NZX/DataCentral.git");
+        assert_eq!(repos[0].source, "git@github.com:NZX/DataCentral.git");
         assert_eq!(
             repos[2].source,
             dir.path().join("scratch").display().to_string()
@@ -244,6 +269,7 @@ mod tests {
             name: "NZX/DataCentral".into(),
             source: "git@github.com:NZX/DataCentral.git".into(),
             clones: vec![],
+            touched: SystemTime::UNIX_EPOCH,
         }];
         assert_eq!(
             choose(&mut "9\nx\n1 maxeonyx/trunc\n".as_bytes(), &repos),
