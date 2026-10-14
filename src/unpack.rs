@@ -139,25 +139,30 @@ pub fn order_prompt(cards: &[Card], about: &[(String, String)], projects: &[Proj
         })
         .collect();
     format!(
-        "Put these concerns in order of leverage across these projects, highest first.\n\n\
-         Leverage is the value of acting on a concern against the effort of acting on it, \
-         summed across the projects. A cheap change that pays in several projects comes \
-         first. An important concern that is expensive to act on does not lead. This is \
-         leverage, not importance.\n\n\
-         Value is what acting buys the stakeholders. Max: \"I should have said \
-         'stakeholders' which explicitly includes both developers and agents. Security can be \
-         justified on the basis of 'making claude comfortable', but for this app probably not \
-         on much else.\" On \"A development build should not share an identity or data with \
-         the production install\", ranked first: \"who fucking cares for a sideloaded app on \
-         one phone? This is incredibly *low* leverage!!! It buys *nothing* for the end \
-         users.\" On \"Signing keys should not exist only on the machine that builds\", ranked \
-         first: \"It's security flavored, first of all, which is a red flag. And it simply \
-         isn't actionable or valuable for the project. The signing key for a sideloaded \
-         personal app... doesn't really matter?\" \"There are way better things like feedback \
-         loop, blah, blah, blah.\" \"frankly, a whole bunch of generic stuff is basically \
-         better.\" \"Niche hazard is a red flag. It's bug flavored.\"\n\n\
-         Take a quick look at the code to judge effort and reach: a few searches and a few \
-         files, not a review. Spend at most a few minutes. Do not modify anything.\n\n\
+        "Put these concerns in order of leverage across these projects, highest first. \
+         Leverage, not importance.\n\n\
+         Work it out per card, per project, in this order.\n\n\
+         1. **Does it pay here?** Who in this project would notice the difference, and what \
+         would they get? Stakeholders are the people who use it and the developers and \
+         coding agents who work on it, as the descriptions say who they are. Check the \
+         rule's premise: does the thing it leans on matter in this project at all? Max, on \
+         \"Code should read the current time and place through one source that tests can \
+         replace\": \"great - *if* tests are valuable for the project. Are they? For clock, \
+         yes, for mx-personal-app... maybe. Not obvious to me. Mid/low leverage due to low \
+         value * medium complexity.\" A guard against a risk nobody here runs pays nothing. \
+         Max, on keeping development and production installs of a sideloaded app apart: \
+         \"who fucking cares for a sideloaded app on one phone? This is incredibly *low* \
+         leverage!!! It buys *nothing* for the end users.\" Security pays only when it lets \
+         people or agents work: \"Security can be justified on the basis of 'making claude \
+         comfortable', but for this app probably not on much else.\"\n\
+         2. **What does it cost here?** Take a quick look at the code: a few searches and a \
+         few files, not a review. How much work is acting on it in this project?\n\
+         3. **Leverage.** Value times reach, against effort, summed across the projects. \
+         Everyday things that every project runs into win on reach. Max: \"There are way \
+         better things like feedback loop, blah, blah, blah.\" \"frankly, a whole bunch of \
+         generic stuff is basically better.\" Severity and risk do not count; neither does \
+         how clever the card is.\n\n\
+         Spend at most a few minutes. Do not modify anything.\n\n\
          ## The projects\n\n{projects}\n## The concerns\n\n{cards}\n\
          ## Your answer\n\n\
          End your reply with every slug above, each exactly once, one per line, between \
@@ -170,30 +175,56 @@ pub fn order_prompt(cards: &[Card], about: &[(String, String)], projects: &[Proj
 pub fn reword_prompt(cards: &[Card]) -> String {
     let cards: String = cards
         .iter()
-        .map(|c| format!("- `{}`: {}\n  {}\n", c.slug, c.title, c.justification))
+        .map(|c| {
+            let stories: String = c.stories.iter().map(|s| format!("  - {s}\n")).collect();
+            format!(
+                "- `{}`: {}\n  {}\n{stories}",
+                c.slug, c.title, c.justification
+            )
+        })
         .collect();
     format!(
-        "Read each title below once, as an engineer who knows the subject and has not read \
-         anything else on the card. The title is the rule a person accepts or declines, and \
-         reviews for later, so they must understand it on first reading, without parsing it.\n\n\
-         Max, about one title: \"This one is hard to parse: 'A plan cached for offline use \
-         should reach further ahead than the longest time it may be offline'. I can't really \
-         understand it.\" A plainer title for the same rule: \"Data cached for offline use \
-         should last longer than the device is likely to stay offline.\"\n\n\
-         Max, about titles like these: \"'The identity that authorises updates' is trying \
-         too hard. 'Android app signing keys' is perfectly fine!\" And: \"some are still \
-         starting with this kind of awkward phrase 'State a person would miss' that's not a \
-         gerund, it has unclear meaning.\"\n\n\
-         Each card's justification is there so you know what its rule means. Keep the meaning.\n\n\
+        "Another agent unpacked these cards from short descriptions of some projects. Check \
+         its work. You can keep a card, give it a better title, or drop it. You cannot add \
+         one, and the rest of the card stays as it is.\n\n\
+         A card's title is a rule someone will keep and review for again and again, in these \
+         projects and in others. So it has to be worth having, as general as it can be while \
+         still true, named the way an engineer would name it, and readable at first sight.\n\n\
+         Go through each card in this order.\n\n\
+         1. **The want.** Read its stakeholder stories. Who gets what, really, if the rule \
+         holds? If nobody gets anything they would notice, drop it. A rare way for one thing \
+         to go wrong is not a want. Max: \"Niche hazard is a red flag. It's bug flavored.\" \
+         Security for its own sake is not a want either: \"It's security flavored, first of \
+         all, which is a red flag.\"\n\
+         2. **Strip the mechanism.** Imagine a project of a different kind: a Windows app, a \
+         web service, a data pipeline. Does the rule still say something true and useful \
+         there? If it only fits the platform these projects use, climb to the thing the \
+         platform is an instance of. Max, on \"Alarms set with the operating system should be \
+         set again after anything that can clear them\": \"we want to generalize it. So it's \
+         like state managed outside of the an app, you know. Could apply to Windows \
+         Registry. It could apply to whatever iOS does.\"\n\
+         3. **Name it.** If engineers already have a name for the idea, use it. Max, on \
+         \"Scheduled actions should be checked as actually set well before they are due\": \
+         \"Then you call this dead man switch or positive confirmation. I feel like that \
+         would be a better title because it's more general.\" Otherwise use the everyday \
+         name of the thing, never an abstract paraphrase: \"'The identity that authorises \
+         updates' is trying too hard. 'Android app signing keys' is perfectly fine!\"\n\
+         4. **Check the bound.** Would the best possible project satisfy the rule as written? \
+         If doing even better breaks it, the bound is wrong. Max, on \"Seeing the result of an \
+         edit should take one documented command\": \"I'd say 'at most one' because 0 is \
+         better\".\n\
+         5. **Cut.** The fewest words that keep it true. Read it once, cold, as an engineer \
+         who has seen nothing else on the card. If you have to parse it, it is not done. \
+         Max: \"This one is hard to parse: 'A plan cached for offline use should reach \
+         further ahead than the longest time it may be offline'. I can't really understand \
+         it.\" And on \"When the same logic is written twice, both copies should be tested \
+         against one shared set of examples\": \"That can be more concise.\"\n\n\
          ## The cards\n\n{cards}\n\
          ## Your answer\n\n\
-         For every card, write one line: its slug, a colon, then one of these.\n\
-         - `keep`, when the title reads at once.\n\
-         - A better title, when it does not. Keep the rule form (\"X should Y\"), keep it as \
-         general and as true as before, and use the everyday names of things.\n\
-         - `drop`, when it cannot be made plain without losing what makes it true.\n\n\
-         End your reply with those lines, every card exactly once, between `{REWORD_OPEN}` and \
-         `{REWORD_CLOSE}`. Nothing else you write is shown to anyone.\n"
+         For every card, one line: its slug, a colon, then `keep`, a better title in the \
+         rule form (\"X should Y\"), or `drop`. End your reply with those lines, every card \
+         exactly once, between `{REWORD_OPEN}` and `{REWORD_CLOSE}`. Nothing else you write \
+         is shown to anyone.\n"
     )
 }
 

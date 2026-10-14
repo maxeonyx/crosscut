@@ -705,7 +705,7 @@ fn map_with_no_concerns_says_how_to_add_one() {
 const UNPACKING_AGENT: &str = r#"p=$(cat); n=$(ls "$PROMPTS" 2>/dev/null | wc -l); mkdir -p "$PROMPTS"; printf '%s' "$p" > "$PROMPTS/$n.md"
 case "$p" in
 *'Describe the project in'*) echo 'A small Python API that serves records.';;
-*'Read each title below once'*) printf 'Ignored prose.\n<crosscut-reword>\nlog-once: keep\nas-of: Derived data should say how old it is\n</crosscut-reword>\n';;
+*'Check its work'*) printf 'Ignored prose.\n<crosscut-reword>\nlog-once: keep\nas-of: Derived data should say how old it is\n</crosscut-reword>\n';;
 *'Put these concerns in order of leverage'*) printf 'Ignored prose.\n<crosscut-order>\nas-of\nlog-once\n</crosscut-order>\n';;
 *'Unpack concerns for these projects'*) cat <<'JSON'
 Thinking out loud first.

@@ -967,9 +967,9 @@ fn unpack_concerns(
                 let _ = unpack::write(&root.join("crosscut/landscape.reply.md"), &reply);
             })?;
             ui.say(Say::Step(
-                "Rewording",
+                "Sharpening",
                 &format!(
-                    "{} cross-cutting concerns, so each reads at first sight.",
+                    "{} cross-cutting concerns: worth having, general, named, plain.",
                     landscape.cards.len()
                 ),
             ));

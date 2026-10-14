@@ -112,8 +112,8 @@ pub fn plan_steps(agent: &str) -> [(&'static str, String, &'static str); 6] {
             "a few minutes; never sees your code",
         ),
         (
-            "Reword",
-            "each one, so it reads at first sight".into(),
+            "Sharpen",
+            "each one: worth having, general, named, plain".into(),
             "or drop it",
         ),
         (
