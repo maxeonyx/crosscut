@@ -797,7 +797,7 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
     let ws = workspace();
     let dir = ws.path();
     // Keep the description, see the overview, decline the first card, accept the second.
-    let (out, err) = unpack(dir, &["api"], "\n\nd\nwe already show refresh times\na\n");
+    let (out, err) = unpack(dir, &["api"], "\n\nd\na\n");
 
     assert!(
         err.contains("api  A small Python API that serves records."),
@@ -859,7 +859,7 @@ fn unpack_describes_floats_cards_keeps_answers_and_reviews_what_was_accepted() {
 
     let declined = fs::read_to_string(dir.join("crosscut/declined.md")).unwrap();
     assert!(
-        declined.contains("- Derived data should say how old it is: we already show refresh times"),
+        declined.contains("- Derived data should say how old it is ("),
         "{declined}"
     );
     assert!(!dir.join("crosscut/concerns/as-of").exists());
@@ -913,7 +913,7 @@ fn unpacking_sees_descriptions_not_code() {
 fn the_next_unpacking_reuses_descriptions_and_knows_what_was_kept_and_declined() {
     let ws = workspace();
     let dir = ws.path();
-    unpack(dir, &["api"], "\n\nd\nwe already show refresh times\na\n");
+    unpack(dir, &["api"], "\n\nd\na\n");
     unpack(dir, &[], "\nq\n");
     // Prompts: describe, unpack, reword, order, review, then only the second unpacking,
     // rewording and order.
@@ -926,8 +926,8 @@ fn the_next_unpacking_reuses_descriptions_and_knows_what_was_kept_and_declined()
         "{second}"
     );
     assert!(
-        second.contains("we already show refresh times"),
-        "declined reasons are passed on"
+        second.contains("Derived data should say how old it is ("),
+        "declined cards are passed on"
     );
 }
 
@@ -936,7 +936,7 @@ fn saved_cards_float_again_without_an_agent_minus_those_already_kept() {
     let ws = workspace();
     let dir = ws.path();
     // Decline the first card, accept the second, which is reviewed.
-    unpack(dir, &["api"], "\n\nd\n\na\n");
+    unpack(dir, &["api"], "\n\nd\na\n");
     let (_, err) = unpack(dir, &["--cards", "crosscut/landscape.json"], "\ns\n");
     assert!(
         err.contains("1/1  Derived data should say how old it is"),

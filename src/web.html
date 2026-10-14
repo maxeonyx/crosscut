@@ -177,7 +177,6 @@ function renderAsk(a){
     <h3>Stakeholder stories</h3><ul>${c.stories.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
     <h3>Here</h3><ul class="here">${c.here.map(h=>`<li><b>${esc(h.project)}</b>${esc(h.story)}</li>`).join('')}</ul></div></div>
     <div class="buttons"><button class="primary" data-a="accept">Accept <kbd>a</kbd></button><button data-a="decline">Decline <kbd>d</kbd></button><button data-a="skip">Skip <kbd>s</kbd></button><button data-a="quit">Stop here</button></div>
-    <div id="why" hidden><p><input type="text" id="reason" placeholder="Why? (optional)"></p><div class="buttons"><button class="primary" id="decline">Decline <kbd>Enter</kbd></button></div></div></div>`;}
   return '';
 }
 
@@ -232,17 +231,15 @@ function wire(){
     else answer($('#text').value);
   };
   document.querySelectorAll('#ask [data-a]').forEach(b=>b.onclick=()=>{
-    if(b.dataset.a==='decline'){$('#why').hidden=false;$('#reason').focus();return;}
     answer({a:b.dataset.a});
   });
-  const d=$('#decline');if(d)d.onclick=()=>answer({a:'decline',reason:$('#reason').value});
 }
 document.addEventListener('keydown',ev=>{
   const a=state.ask;if(!a)return;
   const typing=ev.target.matches('input[type=text],textarea');
   if(a.kind==='card'&&!typing&&!ev.ctrlKey&&!ev.metaKey){const b=$(`#ask [data-a="${{a:'accept',d:'decline',s:'skip'}[ev.key]}"]`);if(b){ev.preventDefault();b.click();return;}}
   if(ev.key==='Enter'&&!(ev.target.tagName==='TEXTAREA'&&ev.shiftKey)){
-    const target=$('#why:not([hidden]) #decline')||$('#go')||$('#ask [data-v="true"]');
+    const target=$('#go')||$('#ask [data-v="true"]');
     if(target){ev.preventDefault();target.click();}
   }
 });

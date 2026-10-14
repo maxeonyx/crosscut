@@ -207,7 +207,7 @@ impl Ui for Browser {
             Say::Answered(answer, title) => {
                 json!({ "k": "answered", "title": title, "a": match answer {
                     Answer::Accept => "accepted",
-                    Answer::Decline(_) => "declined",
+                    Answer::Decline => "declined",
                     Answer::Skip => "skipped",
                     Answer::Quit => return,
                 }})
@@ -280,9 +280,7 @@ impl Ui for Browser {
         let answer = self.ask(json!({ "kind": "card", "n": n, "of": of, "card": card_json(card) }));
         match answer["a"].as_str() {
             Some("accept") => Answer::Accept,
-            Some("decline") => {
-                Answer::Decline(answer["reason"].as_str().unwrap_or_default().trim().into())
-            }
+            Some("decline") => Answer::Decline,
             Some("skip") => Answer::Skip,
             _ => Answer::Quit,
         }

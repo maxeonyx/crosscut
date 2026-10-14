@@ -56,7 +56,7 @@ impl Card {
 
 pub enum Answer {
     Accept,
-    Decline(String),
+    Decline,
     Skip,
     Quit,
 }
@@ -92,8 +92,8 @@ pub fn prompt(
          project.\n\n\
          ## The projects\n\n{projects}\
          Concerns the person already keeps, which you must not propose again: {known}\n\n\
-         Concerns the person declined, with their reasons. Do not propose these again, and \
-         learn from the reasons: {declined}\n\n\
+         Concerns the person declined, with any reasons they added. Do not propose these \
+         again, and learn from them: {declined}\n\n\
          ## Your answer\n\n\
          End your reply with one JSON object between `{CARDS_OPEN}` and `{CARDS_CLOSE}`, and \
          nothing after it:\n\n\
@@ -444,20 +444,15 @@ pub fn accept(root: &Path, card: &Card, today: &str) -> Result<PathBuf, String> 
     Ok(dir)
 }
 
-/// Appends a declined card, with the reason, to `crosscut/declined.md`.
-pub fn decline(root: &Path, card: &Card, reason: &str, today: &str) -> Result<(), String> {
+/// Appends a declined card to `crosscut/declined.md`.
+pub fn decline(root: &Path, card: &Card, today: &str) -> Result<(), String> {
     let path = root.join("crosscut/declined.md");
     let mut text = std::fs::read_to_string(&path).unwrap_or_else(|_| {
         "# Declined\n\nConcerns proposed and declined. Unpacking reads this, and does not \
-         propose them again.\n\n"
+         propose them again. A reason added after one is read too.\n\n"
             .into()
     });
-    let reason = if reason.is_empty() {
-        "no reason given"
-    } else {
-        reason
-    };
-    text += &format!("- {}: {reason} ({today})\n", card.title);
+    text += &format!("- {} ({today})\n", card.title);
     write(&path, &text)
 }
 

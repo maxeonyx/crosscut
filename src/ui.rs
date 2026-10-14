@@ -169,7 +169,7 @@ impl Ui for Terminal {
             Say::Cell { .. } => {}
             Say::Answered(answer, _) => match answer {
                 Answer::Accept => eprintln!("  {}", style::good("✓ accepted")),
-                Answer::Decline(_) => eprintln!("  {}", style::dim("✗ declined")),
+                Answer::Decline => eprintln!("  {}", style::dim("✗ declined")),
                 Answer::Skip | Answer::Quit => {}
             },
             Say::Summary {
@@ -325,11 +325,7 @@ impl Ui for Terminal {
                 "a" | "accept" => return Answer::Accept,
                 "s" | "skip" => return Answer::Skip,
                 "q" | "quit" => return Answer::Quit,
-                "d" | "decline" => {
-                    eprint!("  {} > ", style::dim("Why? (optional)"));
-                    let reason = read_line().unwrap_or_default();
-                    return Answer::Decline(reason.trim().to_string());
-                }
+                "d" | "decline" => return Answer::Decline,
                 _ => {}
             }
         }

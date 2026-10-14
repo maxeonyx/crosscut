@@ -101,9 +101,8 @@ enum Cmd {
     ///
     /// The agent proposes cross-cutting concerns, highest leverage first. Each is
     /// shown as a card: the rule, why it holds, stories, and where it was seen here. Accepted
-    /// concerns become directories in crosscut/concerns/ with a prompt check, which is then
-    /// run to review every project for the rule. Declined ones go to crosscut/declined.md
-    /// with your reason, and are not proposed again. Creates crosscut/ here if there is none
+    /// concerns become directories in crosscut/concerns/, and an agent reviews every project
+    /// for each rule. Declined ones go to crosscut/declined.md, and are not proposed again. Creates crosscut/ here if there is none
     /// above.
     #[command(after_help = "Examples:\n  $ crosscut unpack ~/src/api ~/src/web\n  \
         $ crosscut unpack --model opus --review-model sonnet\n  \
@@ -1044,8 +1043,8 @@ fn unpack_concerns(
                 unpack::accept(&root, card, &today)?;
                 accepted.push(card.slug.clone());
             }
-            unpack::Answer::Decline(reason) => {
-                unpack::decline(&root, card, reason, &today)?;
+            unpack::Answer::Decline => {
+                unpack::decline(&root, card, &today)?;
                 declined += 1;
             }
             unpack::Answer::Skip => skipped += 1,
