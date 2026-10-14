@@ -176,7 +176,7 @@ function renderAsk(a){
     <div class="cardbody"><p>${esc(c.justification)}</p><div>
     <h3>Stakeholder stories</h3><ul>${c.stories.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
     <h3>Here</h3><ul class="here">${c.here.map(h=>`<li><b>${esc(h.project)}</b>${esc(h.story)}</li>`).join('')}</ul></div></div>
-    <div class="buttons"><button class="primary" data-a="accept">Accept <kbd>a</kbd></button><button data-a="decline">Decline <kbd>d</kbd></button><button data-a="skip">Skip <kbd>s</kbd></button><button data-a="quit">Stop here</button></div>
+    <div class="buttons"><button class="primary" data-a="accept">Accept <kbd>a</kbd></button><button data-a="decline">Decline <kbd>d</kbd></button><button data-a="skip">Skip <kbd>s</kbd></button><button data-a="quit">Stop here</button></div></div>`;}
   return '';
 }
 
