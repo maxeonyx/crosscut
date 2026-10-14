@@ -182,10 +182,9 @@ pub fn build_prompt(concern: &Concern, tier: Tier, why: &str, projects: &[Projec
              naming the files it looked at. It must not change anything, use the network or \
              call an AI, and it must be cheap: read files and run quick commands such as git \
              and grep. Never build, install or run the project, or start its toolchain.\n\n\
-             Run it in every project below and compare its answers with the first review. \
-             Where they disagree, read the code and fix whichever is wrong. It must decide \
-             every project here: CrossCut runs it in each one, and throws it away if it \
-             answers `unknown` in any.",
+             You cannot run anything. Read the projects, and make the script agree with the \
+             first review in each. CrossCut runs it in every project, for at most a minute, \
+             and throws it away if it answers `unknown` in any, or fails.",
             tier.label()
         ),
         Tier::Prompt => format!(

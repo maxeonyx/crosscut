@@ -422,7 +422,8 @@ impl Runner {
                 let mut cmd = Command::new(path);
                 cmd.current_dir(&project.dir);
                 cell_env(&mut cmd, concern, project, siblings);
-                let out = harness::run(cmd, None, self.timeout)?;
+                // A check is cheap: one that takes longer than this is not one.
+                let out = harness::run(cmd, None, self.timeout.min(Duration::from_secs(60)))?;
                 let line = out
                     .lines()
                     .map(str::trim)

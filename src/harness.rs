@@ -69,12 +69,11 @@ impl Harness {
                 ])
                 .args(["--permission-mode", "dontAsk"]);
                 if write {
-                    // Edits only under the working directory, the concern's own.
-                    cmd.args([
-                        "--allowedTools",
-                        "Read,Grep,Glob,Bash,Edit(./**),Write(./**)",
-                    ])
-                    .args(["--disallowedTools", "NotebookEdit,Agent,Workflow"]);
+                    // Edits only under the working directory, the concern's own, and no
+                    // shell: a build agent once started an Android emulator. CrossCut runs
+                    // what it writes.
+                    cmd.args(["--allowedTools", "Read,Grep,Glob,Edit(./**),Write(./**)"])
+                        .args(["--disallowedTools", "Bash,NotebookEdit,Agent,Workflow"]);
                 } else {
                     cmd.args(["--allowedTools", "Read,Grep,Glob,Bash,WebFetch,WebSearch"])
                         .args([
