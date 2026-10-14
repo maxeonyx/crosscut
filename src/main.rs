@@ -93,6 +93,9 @@ struct Cli {
     /// With no command: set up in a page in your browser, even without a terminal.
     #[arg(long)]
     browser: bool,
+    /// With no command: float these saved cards instead of unpacking new ones.
+    #[arg(long, value_name = "landscape.json")]
+    cards: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -239,8 +242,8 @@ fn main() -> ExitCode {
     let result = match cli.command {
         // A person at a terminal is set up in their browser, or in the terminal if they ask;
         // an agent gets instructions.
-        None if cli.terminal && tty => welcome(&ui::Terminal),
-        None if cli.browser || tty => in_browser(tty),
+        None if cli.terminal && tty => welcome(&ui::Terminal, cli.cards),
+        None if cli.browser || tty => in_browser(tty, cli.cards),
         None => {
             print!("{}", orientation());
             Ok(ExitCode::SUCCESS)
@@ -762,7 +765,7 @@ fn check(
 /// Bare `crosscut` for a person. In a workspace, show its map and offer to unpack more.
 /// Anywhere else, ask before searching for repositories, clone the chosen ones into a
 /// workspace, and unpack there.
-fn welcome(ui: &dyn ui::Ui) -> Result<ExitCode, String> {
+fn welcome(ui: &dyn ui::Ui, cards: Option<PathBuf>) -> Result<ExitCode, String> {
     let run = RunArgs {
         projects: Vec::new(),
         jobs: 6,
@@ -819,7 +822,7 @@ fn welcome(ui: &dyn ui::Ui) -> Result<ExitCode, String> {
     unpack_concerns(
         ui,
         dirs,
-        None,
+        cards,
         None,
         RunArgs {
             root: Some(workspace),
@@ -830,7 +833,7 @@ fn welcome(ui: &dyn ui::Ui) -> Result<ExitCode, String> {
 
 /// Runs the welcome in a page served on localhost, and keeps serving it afterwards so the
 /// map and report stay readable.
-fn in_browser(open: bool) -> Result<ExitCode, String> {
+fn in_browser(open: bool, cards: Option<PathBuf>) -> Result<ExitCode, String> {
     let browser = web::Browser::start()?;
     eprintln!(
         "{}  {}\n\n  {}\n",
@@ -841,7 +844,7 @@ fn in_browser(open: bool) -> Result<ExitCode, String> {
     if open {
         browser.open();
     }
-    let result = welcome(&browser);
+    let result = welcome(&browser, cards);
     browser.end(result.as_ref().err().map(String::as_str));
     eprintln!(
         "\n{}",
