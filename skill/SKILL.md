@@ -246,8 +246,8 @@ Design each concern this way:
    - still literally true.
 
    The rule states a principle, never a fact. It is hedged only where it has
-   real exceptions. It names things by their everyday names: "retries", not
-   "repeated attempts at a failed operation". Generic does not mean
+   real exceptions. It names things by their everyday names: "signing keys",
+   not "the identity that authorises updates". Generic does not mean
    abstract. A reader who knows the thing understands the rule on first
    reading; a reader who doesn't is helped by the justification.
 4. Justify the rule in the academic language, and say where it doesn't

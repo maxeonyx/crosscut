@@ -144,23 +144,18 @@ pub fn order_prompt(cards: &[Card], about: &[(String, String)], projects: &[Proj
          summed across the projects. A cheap change that pays in several projects comes \
          first. An important concern that is expensive to act on does not lead. This is \
          leverage, not importance.\n\n\
-         Value is what the change buys the stakeholders: the people who use the software, \
-         and the developers and coding agents who work on it, as the descriptions say who \
-         they are. For a personal app on one phone, that is its one owner, and the agents \
-         that change it. Hygiene that guards against a risk none of them runs, such as \
-         separating development and production installs of a sideloaded app with one user, \
-         buys nothing, and goes last. Max, on exactly that card ranked first: \"who cares \
-         for a sideloaded app on one phone? This is incredibly low leverage.\" A \
-         security-flavoured change can still earn its place when it lets an agent work \
-         safely and comfortably, but rarely for much else in software like this. Max, on \
-         another card ranked first, \"Signing keys should not exist only on the machine that \
-         builds\": \"It's security flavored, first of all, which is a red flag. And it simply \
-         isn't actionable or valuable for the project.\" Broad, everyday concerns usually \
-         lead: how fast a developer or agent sees the result of a change, whether the \
-         commands to build and check work as written, whether a failure is noticed. Max: \
-         \"There are way better things like feedback loop\", \"frankly, a whole bunch of \
-         generic stuff is basically better.\" A niche hazard goes last: \"Niche hazard is a \
-         red flag. It's bug flavored.\"\n\n\
+         Value is what acting buys the stakeholders. Max: \"I should have said \
+         'stakeholders' which explicitly includes both developers and agents. Security can be \
+         justified on the basis of 'making claude comfortable', but for this app probably not \
+         on much else.\" On \"A development build should not share an identity or data with \
+         the production install\", ranked first: \"who fucking cares for a sideloaded app on \
+         one phone? This is incredibly *low* leverage!!! It buys *nothing* for the end \
+         users.\" On \"Signing keys should not exist only on the machine that builds\", ranked \
+         first: \"It's security flavored, first of all, which is a red flag. And it simply \
+         isn't actionable or valuable for the project. The signing key for a sideloaded \
+         personal app... doesn't really matter?\" \"There are way better things like feedback \
+         loop, blah, blah, blah.\" \"frankly, a whole bunch of generic stuff is basically \
+         better.\" \"Niche hazard is a red flag. It's bug flavored.\"\n\n\
          Take a quick look at the code to judge effort and reach: a few searches and a few \
          files, not a review. Spend at most a few minutes. Do not modify anything.\n\n\
          ## The projects\n\n{projects}\n## The concerns\n\n{cards}\n\
@@ -185,10 +180,10 @@ pub fn reword_prompt(cards: &[Card]) -> String {
          should reach further ahead than the longest time it may be offline'. I can't really \
          understand it.\" A plainer title for the same rule: \"Data cached for offline use \
          should last longer than the device is likely to stay offline.\"\n\n\
-         The subject of a rule is a plain thing the reader recognises at once: \"Retries\", \
-         \"A scheduled job\", \"The cache\". It is never a noun phrase built from a clause. \
-         \"Work a caller was told had succeeded should not be lost\" has to be untangled; \
-         \"Acknowledged writes should survive a crash\" does not.\n\n\
+         Max, about titles like these: \"'The identity that authorises updates' is trying \
+         too hard. 'Android app signing keys' is perfectly fine!\" And: \"some are still \
+         starting with this kind of awkward phrase 'State a person would miss' that's not a \
+         gerund, it has unclear meaning.\"\n\n\
          Each card's justification is there so you know what its rule means. Keep the meaning.\n\n\
          ## The cards\n\n{cards}\n\
          ## Your answer\n\n\

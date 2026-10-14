@@ -51,6 +51,8 @@ This repository builds the tool. Its tests, evaluations and demos use invented e
 
 In English, for people (CLI output, docs, the site, slides), always say **cross-cutting concern**. "Concern" alone is the term in code and file names (`concern.md`, `crosscut/concerns/`).
 
+**Prompts keep Max's language, not yours.** Max: "It's not about keeping my words verbatim. It's about keeping the language different to the agent's default language. Because the whole point of this project is to get an agent out of its default attractor. So you need to use your non-default language that I'm using." When feedback goes into a prompt (`skill/`, the prompts in `src/`), quote him and add as little of your own prose around it as you can. A smooth paraphrase in your own register pulls the agent back where it started.
+
 ## 6. Commands
 
 ```bash
