@@ -27,6 +27,8 @@ Max's own words from calibration, quoted:
 
 Learn from these as much as from the cards:
 
+- "Signing keys should not exist only on the machine that builds", ranked first for two sideloaded personal apps: "It's security flavored, first of all, which is a red flag. And it simply isn't actionable or valuable for the project."
+- "Alarms set with the operating system should be set again after anything that can clear them": right, but one step short of general. "So it's like state managed outside of the app, you know. Could apply to Windows Registry. It could apply to whatever iOS does."
 - "Shell scripts survive a Windows checkout": not a concern. "Not managing this causes shit to break in an obvious way, so it's on the default path."
 - "Merge gates should depend on a job that always runs": weak. "The impact is 'temporary dev blocker' and it's just a stupid 'clever' bad-style gotcha."
 - "A state change and the message announcing it should succeed or fail together": weak. "Badly generalized. Use computer science concepts... what's the practitioner supposed to do with this?"

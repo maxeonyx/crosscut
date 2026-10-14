@@ -43,9 +43,11 @@ Write each candidate the way a concern is written: from a concrete story, back t
 
 **A card is the most general form of the rule.** The person keeps the rule and reviews for it again later, in these projects and others, and each review should find different instances. A rule that only fits one situation finds nothing else.
 
+Descriptions name platforms, and a rule that names a platform's mechanism is usually one step short of its general form. Max, about "Alarms set with the operating system should be set again after anything that can clear them": "Yes, but also we want to generalize it. So it's like state managed outside of the app, you know. Could apply to Windows Registry. It could apply to whatever iOS does." The platform belongs in Here, not in the rule.
+
 For each candidate, name the concept a computer scientist would use: ownership and lifetimes, parsing at the boundary, monotonic time, idempotency, staleness. State the rule at that level. Then test it: in a different project of a different kind, would a review for this rule find things? If not, climb. Stop before it turns vague: "resources should be handled correctly" finds nothing. The seeds are the right height.
 
-**General, but never contorted: name things by their everyday names.** Being generic does not mean giving up being concrete. A reader who already knows the thing must understand the rule on first reading, without parsing it. Unfamiliar words are fine, because the justification explains them. Abstract paraphrase is not. If the thing has a name ("signing keys", "time zones", "retries", "the cache"), use the name. In Max's words, about a card titled "The identity that authorises updates should outlive the machine that builds them": "'Android app signing keys' is perfectly fine! Or just 'Signing keys'. While we are trying to be *generic*, we don't want to forgo being *concrete*. We shan't contort our speech." Write "Signing keys should not exist only on the machine that builds", not "the identity that authorises updates". The subject of the rule is a plain thing the reader recognises at once: "Signing keys", "A scheduled job", "Retries". Never a noun phrase built from a clause, such as "State a person would miss should survive replacing the device", which has to be untangled before it means anything; say "Settings and history on a phone should survive a new phone" instead.
+**General, but never contorted: name things by their everyday names.** Being generic does not mean giving up being concrete. A reader who already knows the thing must understand the rule on first reading, without parsing it. Unfamiliar words are fine, because the justification explains them. Abstract paraphrase is not. If the thing has a name ("time zones", "retries", "the cache", "a scheduled job"), use the name. In Max's words, about a card that called a plain thing by an abstract paraphrase: "While we are trying to be *generic*, we don't want to forgo being *concrete*. We shan't contort our speech." The subject of the rule is a plain thing the reader recognises at once: "Retries", "A scheduled job", "The cache". Never a noun phrase built from a clause, such as "Work a caller was told had succeeded should not be lost", which has to be untangled before it means anything; say "Acknowledged writes should survive a crash" instead.
 
 Merge candidates that are the same rule. A rule that applies to several of the projects is worth more than one that applies to a single project.
 
@@ -54,6 +56,7 @@ Merge candidates that are the same rule. A rule that applies to several of the p
 Drop a candidate when any of these is true:
 - **It is on the default path.** If leaving it unmanaged would leave something obviously broken, the ordinary path already handles it.
 - **It is a lecture.** Common practice told to an expert. Judge this by the reader.
+- **It is a niche hazard.** A rare way for one thing to go wrong is a bug in waiting, however it is worded. Max: "Niche hazard is a red flag. It's bug flavored."
 - **It is a bug or a gotcha.** This is not a bug hunt: a defect is not a concern. Neither is a platform trap any agent could find without taste.
 - **It is about change** (migrations, API changes, renames). A change is not a property of the code.
 - **It is compliance, security or obligation** ("is there a linter", "does every PR get two approvals"). That includes security-flavoured hygiene that buys the stakeholders nothing. Stakeholders are the people who use the software and the developers and coding agents who work on it. Separating development and production installs of an app with one user is not worth a card; a change that lets an agent work on it safely can be.
@@ -63,6 +66,8 @@ Drop a candidate when any of these is true:
 ## 4. Rank by leverage
 
 Leverage is value against the effort of acting. The cheap rule that pays across several of the projects comes first. The important but expensive one does not lead.
+
+Broad, everyday concerns usually beat clever ones: how fast a developer or agent sees the result of a change, whether the commands to build and check work as written, whether a failure is noticed. Max, about a security-flavoured card ranked first ("Signing keys should not exist only on the machine that builds", for two personal apps): "It's security flavored, first of all, which is a red flag. And it simply isn't actionable or valuable for the project. The signing key for a sideloaded personal app... doesn't really matter?" And: "There are way better things like feedback loop", "frankly, a whole bunch of generic stuff is basically better."
 
 ## 5. Present
 
