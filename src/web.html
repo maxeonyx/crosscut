@@ -10,9 +10,10 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#121416;--panel:#1a1d20;--ink:#e9e7e2;--muted:#a3a09a;--faint:#6b6964;--line:#2b2f33;--accent:#7cc4e4;--accent-ink:#06222f;--good:#8fcf9b;--good-bg:#1c3324;--warn:#e8b86b;--warn-bg:#3a2e18;--na-bg:#24272a}}
 :root[data-theme=dark]{--bg:#121416;--panel:#1a1d20;--ink:#e9e7e2;--muted:#a3a09a;--faint:#6b6964;--line:#2b2f33;--accent:#7cc4e4;--accent-ink:#06222f;--good:#8fcf9b;--good-bg:#1c3324;--warn:#e8b86b;--warn-bg:#3a2e18;--na-bg:#24272a}
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 var(--sans);padding:0 16px 32px}
 main{max-width:760px;margin:0 auto}
+/* A wide window shows a card's reasons beside its stories, so it fits on one screen. */
+@media (min-width:1000px){main{max-width:1040px}.cardbody{display:grid;grid-template-columns:1fr 1fr;gap:32px}.cardbody h3:first-child{margin-top:14px}}
 header{padding:56px 0 28px}
 header h1{font-size:34px;margin:0;letter-spacing:-.02em}
 header p{margin:4px 0 0;color:var(--muted)}
@@ -172,9 +173,9 @@ function renderAsk(a){
     <div class="buttons"><button class="primary" id="go">Go through them <kbd>Enter</kbd></button></div></div>`;
   if(a.kind==='card'){const c=a.card;return `<div class="ask"><div class="bar"><i style="width:${100*a.n/a.of}%"></i></div>
     <div class="meta">${a.n} of ${a.of} · ${esc(c.projects.join(' · '))}</div><h2>${esc(c.title)}</h2>
-    <p>${esc(c.justification)}</p>
+    <div class="cardbody"><p>${esc(c.justification)}</p><div>
     <h3>Stakeholder stories</h3><ul>${c.stories.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
-    <h3>Here</h3><ul class="here">${c.here.map(h=>`<li><b>${esc(h.project)}</b>${esc(h.story)}</li>`).join('')}</ul>
+    <h3>Here</h3><ul class="here">${c.here.map(h=>`<li><b>${esc(h.project)}</b>${esc(h.story)}</li>`).join('')}</ul></div></div>
     <div class="buttons"><button class="primary" data-a="accept">Accept <kbd>a</kbd></button><button data-a="decline">Decline <kbd>d</kbd></button><button data-a="skip">Skip <kbd>s</kbd></button><button data-a="quit">Stop here</button></div>
     <div id="why" hidden><p><input type="text" id="reason" placeholder="Why? (optional)"></p><div class="buttons"><button class="primary" id="decline">Decline <kbd>Enter</kbd></button></div></div></div>`;}
   return '';
@@ -200,11 +201,18 @@ function render(){
   $('#done').innerHTML=renderDone(state.done);
   const id=state.ask?state.ask.id:null;
   if(id!==shownAsk){shownAsk=id;$('#ask').innerHTML=renderAsk(state.ask);wire();
-    const box=$('#ask .ask');if(box)box.scrollIntoView({block:box.offsetHeight>innerHeight*.9?'start':'center'});
     const ta=$('#ask textarea');if(ta){ta.oninput=()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+2+'px';};ta.oninput();}
+    // A question always fits the window: one taller than it is shrunk to fit.
+    const box=$('#ask .ask');
+    // Shrinking rewraps the text, so refine the scale a few times.
+    if(box){const room=innerHeight-24;let z=1;
+      for(let i=0;i<4&&box.getBoundingClientRect().height>room*1.001||i<4&&z<1&&box.getBoundingClientRect().height<room*.97;i++){
+        z=Math.min(1,Math.max(.5,z*room/box.getBoundingClientRect().height));box.style.zoom=z;}
+      while(z>.5&&box.getBoundingClientRect().height>room){z*=.97;box.style.zoom=z;}
+      box.scrollIntoView({block:'center'});}
     const t=$('#ask textarea,#ask input[type=text]');if(t&&!REPLAY)t.focus();}
-  else if(!state.ask&&state.done)$('#done').scrollIntoView({block:'end'});
-  else if(!state.ask)window.scrollTo(0,document.body.scrollHeight);
+  // Otherwise keep the newest content at the bottom of the screen.
+  else if(!state.ask)($('#done').firstElementChild||$('#log').lastElementChild)?.scrollIntoView({block:'end'});
 }
 
 async function answer(value){
