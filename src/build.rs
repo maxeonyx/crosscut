@@ -108,8 +108,11 @@ pub fn recommend_prompt(concerns: &[Concern], projects: &[Project]) -> String {
          running commands, without judgment. Say what it would look at.\n\
          - `prompt`: check in an agentic review prompt. Deciding it needs judgment, so an \
          agent keeps reviewing it, with instructions written for these projects.\n\n\
-         A script that says `yes` when the rule is not met is worse than an agent review, so \
-         choose `tool` or `custom` only when a script would get it right. You may read the \
+         A check runs often, so it must be cheap: it reads files and runs quick commands such \
+         as git and grep. Choose `tool` only for a tool already installed here or already \
+         used by these projects, and `custom` only when reading the files decides it. If \
+         deciding needs the project built, installed or run, choose `prompt`. A script that \
+         says `yes` when the rule is not met is worse than an agent review. You may read the \
          projects, but keep it quick.\n\n\
          # The projects\n\n{}\n# The cross-cutting concerns\n\n{concerns}\n\
          # Your answer\n\n\
@@ -177,10 +180,12 @@ pub fn build_prompt(concern: &Concern, tier: Tier, why: &str, projects: &[Projec
              `CROSSCUT_CONCERN_DIR`. It prints one line, `status: evidence`. The status is \
              `yes`, `partly`, `missing`, `n/a` or `unknown`, and the evidence is one sentence \
              naming the files it looked at. It must not change anything, use the network or \
-             call an AI. If a tool it needs is not installed, it prints \
-             `unknown: <tool> is not installed`.\n\n\
+             call an AI, and it must be cheap: read files and run quick commands such as git \
+             and grep. Never build, install or run the project, or start its toolchain.\n\n\
              Run it in every project below and compare its answers with the first review. \
-             Where they disagree, read the code and fix whichever is wrong.",
+             Where they disagree, read the code and fix whichever is wrong. It must decide \
+             every project here: CrossCut runs it in each one, and throws it away if it \
+             answers `unknown` in any.",
             tier.label()
         ),
         Tier::Prompt => format!(

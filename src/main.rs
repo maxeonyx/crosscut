@@ -1077,6 +1077,33 @@ fn unpack_concerns(
     Ok(make_permanent(ui, &root, accepted, review)?.unwrap_or(status))
 }
 
+/// A built script is kept only if it gives a real answer in every project: one that answers
+/// `unknown` anywhere, or fails, is removed, and the concern stays an agent review.
+fn decides_every_project(
+    runner: &Runner,
+    concern: &Concern,
+    tier: build::Tier,
+    projects: &[Project],
+) -> Result<(), String> {
+    if tier == build::Tier::Prompt {
+        return Ok(());
+    }
+    let script = concern.dir.join("check");
+    let exec = Mechanism::Exec(script.clone());
+    for project in projects {
+        let failure = match runner.cell(concern, &exec, project, projects, &|_| {}) {
+            Ok((status, evidence, _)) if status == "unknown" => {
+                format!("it could not decide {}: {evidence}", project.name)
+            }
+            Ok(_) => continue,
+            Err(e) => format!("it failed in {}: {e}", project.name),
+        };
+        let _ = std::fs::remove_file(&script);
+        return Err(format!("{failure}; it stays an agent review"));
+    }
+    Ok(())
+}
+
 /// Offers to make the accepted cross-cutting concerns' checks permanent; then an agent
 /// recommends a kind of check for each, the person keeps or changes them, agents build the
 /// chosen ones, and they run. The outcome of that run, if there was one.
@@ -1138,6 +1165,7 @@ fn make_permanent(
         return Ok(None);
     }
     ui.say(Say::Step("Building", "the checks you chose."));
+    let runner = Runner::new(&run);
     let results = pool(run.jobs, &jobs, |(concern, tier, why)| {
         let say = |doing: &str, status: Option<&str>| {
             ui.say(Say::Cell {
@@ -1159,7 +1187,8 @@ fn make_permanent(
             unpack::Tools::Write(&projects),
             timeout,
         )
-        .and_then(|_| build::built(concern, *tier));
+        .and_then(|_| build::built(concern, *tier))
+        .and_then(|()| decides_every_project(&runner, concern, *tier, &projects));
         match &out {
             Ok(()) => say("", Some("built")),
             Err(_) => say("could not build", Some("failed")),

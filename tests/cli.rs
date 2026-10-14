@@ -725,7 +725,7 @@ JSON
 ;;
 *'Recommend how each cross-cutting concern'*) printf '<crosscut-tiers>\nas-of: custom: the cache sets a timestamp\nlog-once: prompt: needs judgment\n</crosscut-tiers>\n';;
 *'Write `check.md`'*) echo 'Look for log calls in except blocks.' > check.md; echo 'Wrote check.md';;
-*'Write `check`'*) printf '#!/bin/sh\necho "yes: the cache sets a timestamp"\n' > check; echo 'Wrote check';;
+*'Write `check`'*) printf '#!/bin/sh\necho "%s"\n' "${CHECK_SAYS:-yes: the cache sets a timestamp}" > check; echo 'Wrote check';;
 *) echo '<crosscut-findings>
 - `src/repo.py:12` logs then re-raises; drop the log line.
 </crosscut-findings>
@@ -753,6 +753,39 @@ fn unpack(dir: &Path, args: &[&str], answers: &str) -> (String, String) {
         .get_output()
         .clone();
     (text(&out.stdout), text(&out.stderr))
+}
+
+#[test]
+fn a_built_script_that_cannot_decide_a_project_is_thrown_away() {
+    let ws = workspace();
+    let dir = ws.path();
+    // Keep the description, see the overview, accept both, make them permanent as recommended:
+    // a script for as-of, which cannot decide, and a prompt for log-once.
+    let out = crosscut()
+        .args(["unpack", "api", "--harness", UNPACKING_AGENT])
+        .env("PROMPTS", dir.join("prompts"))
+        .env("CHECK_SAYS", "unknown: java is not installed")
+        .current_dir(dir)
+        .write_stdin("\n\na\na\ny\n\n")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let err = text(&out.stderr);
+    assert!(
+        err.contains(
+            "as-of: it could not decide api: java is not installed; it stays an agent review"
+        ),
+        "{err}"
+    );
+    let concerns = dir.join("crosscut/concerns");
+    assert!(!concerns.join("as-of/check").exists());
+    assert!(concerns.join("log-once/check.md").is_file());
+    assert_eq!(
+        text(&out.stdout).matches("cells checked").count(),
+        2,
+        "the first review, then only log-once again"
+    );
 }
 
 fn prompt_number(dir: &Path, n: usize) -> String {
